@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
@@ -77,6 +78,8 @@ import androidx.room.withTransaction
 import com.studyforge.app.data.CollectionEntity
 import com.studyforge.app.data.QuestionCollectionCrossRef
 import com.studyforge.app.data.QuestionEntity
+import com.studyforge.app.data.ReviewLogEntity
+import com.studyforge.app.data.recordGradedReview
 import com.studyforge.app.data.StudyDatabase
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -92,6 +95,7 @@ fun StudyForgeApp(database: StudyDatabase) {
     val appContext = LocalContext.current
     val questions by dao.observeQuestions().collectAsState(initial = emptyList())
     val collections by dao.observeCollections().collectAsState(initial = emptyList())
+    val reviewLogs by dao.observeReviewLogs().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -129,7 +133,8 @@ fun StudyForgeApp(database: StudyDatabase) {
         NavItem("Library", Icons.Default.Book),
         NavItem("Collections", Icons.Default.Folder),
         NavItem("Study", Icons.Default.School),
-        NavItem("Backup", Icons.Default.ImportExport)
+        NavItem("Backup", Icons.Default.ImportExport),
+        NavItem("Progress", Icons.Default.Insights)
     )
 
     Scaffold(
@@ -170,6 +175,7 @@ fun StudyForgeApp(database: StudyDatabase) {
                     questionCount = questions.size,
                     collectionCount = collections.size,
                     reviewCount = questions.sumOf { it.reviewCount },
+                    dueCount = questions.count { it.dueAt == null || it.dueAt <= System.currentTimeMillis() },
                     onAdd = { editorCollectionIds = emptyList(); editorId = null; editorOpen = true },
                     onLibrary = { selectedTab = 1 },
                     onStudy = { selectedTab = 3 }
@@ -191,7 +197,9 @@ fun StudyForgeApp(database: StudyDatabase) {
                 )
                 3 -> StudyScreen(
                     questions = questions,
-                    onReview = { question -> scope.launch { dao.recordReview(question.id, System.currentTimeMillis()) } }
+                    onReview = { question, rating, wasCorrect, mistakeCategory, reviewMode ->
+                        scope.launch { database.recordGradedReview(question.id, rating, wasCorrect, mistakeCategory.orEmpty(), reviewMode) }
+                    }
                 )
                 4 -> BackupScreen(
                     onExport = { uri -> scope.launch { exportBackup(appContext, database, uri); snackbar.showSnackbar("Backup exported") } },
@@ -204,6 +212,7 @@ fun StudyForgeApp(database: StudyDatabase) {
                         }
                     } }
                 )
+                5 -> ProgressScreen(questions = questions, reviewLogs = reviewLogs)
             }
         }
     }
@@ -214,6 +223,7 @@ private fun HomeScreen(
     questionCount: Int,
     collectionCount: Int,
     reviewCount: Int,
+    dueCount: Int,
     onAdd: () -> Unit,
     onLibrary: () -> Unit,
     onStudy: () -> Unit
@@ -228,16 +238,17 @@ private fun HomeScreen(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatCard("Questions", questionCount.toString(), Modifier.weight(1f))
-            StatCard("Collections", collectionCount.toString(), Modifier.weight(1f))
+            StatCard("Due", dueCount.toString(), Modifier.weight(1f))
             StatCard("Reviews", reviewCount.toString(), Modifier.weight(1f))
         }
+        Text("${collectionCount} collections • Offline-first", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("Quick actions", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         ActionCard("Question library", "Search, edit, and organize your questions.", Icons.Default.Book, onLibrary)
         ActionCard("Start studying", "Review flashcards and answer MCQs.", Icons.Default.School, onStudy)
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Version 1.0", fontWeight = FontWeight.SemiBold)
-                Text("Your library is stored locally on this device. Export a JSON backup regularly so you can move your work to another device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Version 2.0 • Learning engine", fontWeight = FontWeight.SemiBold)
+                Text("StudyForge now schedules reviews, tracks mistakes, and summarizes weak topics. Your library stays on this device. Export a JSON backup regularly so you can move your work to another device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -360,91 +371,6 @@ private fun CollectionsScreen(
     )
 }
 
-@Composable
-private fun StudyScreen(questions: List<QuestionEntity>, onReview: (QuestionEntity) -> Unit) {
-    var index by rememberSaveable { mutableIntStateOf(0) }
-    var revealed by rememberSaveable { mutableStateOf(false) }
-    var selectedAnswer by rememberSaveable { mutableStateOf<String?>(null) }
-    var checked by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(questions.size) { if (index >= questions.size) index = 0 }
-    if (questions.isEmpty()) {
-        EmptyState("Nothing to study yet", "Add flashcards or MCQs in your library, then come back here.")
-        return
-    }
-    val q = questions[index.coerceIn(0, questions.lastIndex)]
-    val options = remember(q.id, q.optionsJson) { runCatching { JSONArray(q.optionsJson).let { arr -> (0 until arr.length()).map { arr.optString(it) } } }.getOrDefault(emptyList()) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Study session", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.weight(1f))
-            Text("${index + 1} / ${questions.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Card(shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-                Text(q.type.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                Text(q.prompt, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                if (q.subject.isNotBlank() || q.chapter.isNotBlank()) Text(listOf(q.subject, q.chapter).filter { it.isNotBlank() }.joinToString(" • "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (q.latex.isNotBlank()) {
-                    HorizontalDivider()
-                    Text("Equation", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
-                    Text(q.latex, style = MaterialTheme.typography.bodyLarge)
-                }
-                if (q.type == "MCQ" && options.isNotEmpty()) {
-                    options.forEachIndexed { optionIndex, option ->
-                        val prefix = ('A'.code + optionIndex).toChar()
-                        Card(
-                            modifier = Modifier.fillMaxWidth().clickable(enabled = !checked) { selectedAnswer = option },
-                            colors = CardDefaults.cardColors(containerColor = if (selectedAnswer == option) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("$prefix.", fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.width(10.dp))
-                                Text(option, modifier = Modifier.weight(1f))
-                                if (checked && option == q.answer) Text("Correct", color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                    if (!checked) Button(onClick = { checked = true }, enabled = selectedAnswer != null, modifier = Modifier.fillMaxWidth()) { Text("Check answer") }
-                    if (checked) {
-                        val right = selectedAnswer == q.answer
-                        Text(if (right) "Correct" else "Not quite — review the answer below.", fontWeight = FontWeight.Bold, color = if (right) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error)
-                        Text("Answer: ${q.answer}", fontWeight = FontWeight.SemiBold)
-                    }
-                } else {
-                    if (!revealed) Button(onClick = { revealed = true }, modifier = Modifier.fillMaxWidth()) { Text("Reveal answer") }
-                    else {
-                        HorizontalDivider()
-                        Text("Answer", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        Text(q.answer, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-                if ((revealed || checked) && q.explanation.isNotBlank()) {
-                    HorizontalDivider()
-                    Text("Explanation", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    Text(q.explanation)
-                }
-            }
-        }
-        if (revealed || checked) {
-            Text("How well did you know this?", fontWeight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                listOf("Again", "Good", "Easy").forEach { grade ->
-                    OutlinedButton(onClick = {
-                        onReview(q)
-                        if (index < questions.lastIndex) index++ else index = 0
-                        revealed = false; checked = false; selectedAnswer = null
-                    }, modifier = Modifier.weight(1f)) { Text(grade) }
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = { index = if (index == 0) questions.lastIndex else index - 1; revealed = false; checked = false; selectedAnswer = null }, modifier = Modifier.weight(1f)) { Text("Previous") }
-            OutlinedButton(onClick = { index = (index + 1) % questions.size; revealed = false; checked = false; selectedAnswer = null }, modifier = Modifier.weight(1f)) { Text("Next") }
-        }
-        Text("Version 1.0 records review counts only. Adaptive spaced repetition and mistake analytics are planned for Version 2.0.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QuestionEditor(
@@ -486,7 +412,11 @@ private fun QuestionEditor(
                             subject = subject.trim(), chapter = chapter.trim(), topic = topic.trim(), type = type,
                             optionsJson = JSONArray(parsed).toString(), latex = latex.trim(), tagsCsv = tags.trim(), status = status,
                             createdAt = initial?.createdAt ?: now, updatedAt = now,
-                            reviewCount = initial?.reviewCount ?: 0, lastReviewedAt = initial?.lastReviewedAt
+                            reviewCount = initial?.reviewCount ?: 0, lastReviewedAt = initial?.lastReviewedAt,
+                            dueAt = initial?.dueAt, intervalDays = initial?.intervalDays ?: 0.0,
+                            easeFactor = initial?.easeFactor ?: 2.5, repetitions = initial?.repetitions ?: 0,
+                            lapseCount = initial?.lapseCount ?: 0, learningState = initial?.learningState ?: "New",
+                            correctCount = initial?.correctCount ?: 0, incorrectCount = initial?.incorrectCount ?: 0
                         )
                         onSave(entity, selectedCollections.toList())
                     }
@@ -550,7 +480,7 @@ private fun BackupScreen(onExport: (Uri) -> Unit, onImport: (Uri) -> Unit) {
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), onResult = { it?.let(onImport) })
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Backup & restore", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text("Move your library between devices or keep a safe copy. The backup includes questions, collections, links, and review counts.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Move your library between devices or keep a safe copy. Version 2 backups include questions, collections, review history, scheduling, and mistake tracking. Version 1 backups are still supported.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.ImportExport, null, tint = MaterialTheme.colorScheme.primary)
@@ -591,19 +521,30 @@ private suspend fun exportBackup(context: Context, database: StudyDatabase, uri:
     val questions = dao.getAllQuestions()
     val collections = dao.getAllCollections()
     val links = dao.getAllLinks()
-    val root = JSONObject().put("app", "StudyForge").put("schemaVersion", 1).put("exportedAt", System.currentTimeMillis())
+    val reviewLogs = dao.getAllReviewLogs()
+    val root = JSONObject().put("app", "StudyForge").put("schemaVersion", 2).put("exportedAt", System.currentTimeMillis())
     root.put("questions", JSONArray().apply {
         questions.forEach { q -> put(JSONObject()
             .put("id", q.id).put("prompt", q.prompt).put("answer", q.answer).put("explanation", q.explanation)
             .put("subject", q.subject).put("chapter", q.chapter).put("topic", q.topic).put("type", q.type)
             .put("optionsJson", q.optionsJson).put("latex", q.latex).put("tagsCsv", q.tagsCsv).put("status", q.status)
             .put("createdAt", q.createdAt).put("updatedAt", q.updatedAt).put("reviewCount", q.reviewCount)
-            .put("lastReviewedAt", q.lastReviewedAt ?: JSONObject.NULL)) }
+            .put("lastReviewedAt", q.lastReviewedAt ?: JSONObject.NULL)
+            .put("dueAt", q.dueAt ?: JSONObject.NULL).put("intervalDays", q.intervalDays).put("easeFactor", q.easeFactor)
+            .put("repetitions", q.repetitions).put("lapseCount", q.lapseCount).put("learningState", q.learningState)
+            .put("correctCount", q.correctCount).put("incorrectCount", q.incorrectCount)) }
     })
     root.put("collections", JSONArray().apply {
         collections.forEach { c -> put(JSONObject().put("id", c.id).put("name", c.name).put("description", c.description).put("createdAt", c.createdAt)) }
     })
     root.put("links", JSONArray().apply { links.forEach { put(JSONObject().put("questionId", it.questionId).put("collectionId", it.collectionId)) } })
+    root.put("reviewLogs", JSONArray().apply {
+        reviewLogs.forEach { log -> put(JSONObject()
+            .put("id", log.id).put("questionId", log.questionId).put("reviewedAt", log.reviewedAt)
+            .put("rating", log.rating).put("wasCorrect", log.wasCorrect ?: JSONObject.NULL)
+            .put("mistakeCategory", log.mistakeCategory).put("reviewMode", log.reviewMode)
+            .put("scheduledDueAt", log.scheduledDueAt ?: JSONObject.NULL)) }
+    })
     context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(root.toString(2)) }
         ?: error("Could not open the selected file for writing")
 }
@@ -613,7 +554,8 @@ private suspend fun importBackup(context: Context, database: StudyDatabase, uri:
         ?: error("Could not read the selected file")
     val root = JSONObject(raw)
     require(root.optString("app") == "StudyForge") { "This file is not a StudyForge backup" }
-    require(root.optInt("schemaVersion", -1) == 1) { "Unsupported backup version" }
+    val schemaVersion = root.optInt("schemaVersion", -1)
+    require(schemaVersion in 1..2) { "Unsupported backup version" }
     val questions = mutableListOf<QuestionEntity>()
     val qArray = root.optJSONArray("questions") ?: JSONArray()
     for (i in 0 until qArray.length()) {
@@ -624,7 +566,12 @@ private suspend fun importBackup(context: Context, database: StudyDatabase, uri:
             topic = o.optString("topic"), type = o.optString("type", "Flashcard"), optionsJson = o.optString("optionsJson", "[]"),
             latex = o.optString("latex"), tagsCsv = o.optString("tagsCsv"), status = o.optString("status", "Draft"),
             createdAt = o.optLong("createdAt", System.currentTimeMillis()), updatedAt = o.optLong("updatedAt", System.currentTimeMillis()),
-            reviewCount = o.optInt("reviewCount", 0), lastReviewedAt = if (o.isNull("lastReviewedAt")) null else o.optLong("lastReviewedAt")
+            reviewCount = o.optInt("reviewCount", 0), lastReviewedAt = if (o.isNull("lastReviewedAt")) null else o.optLong("lastReviewedAt"),
+            dueAt = if (o.isNull("dueAt")) null else o.optLong("dueAt"),
+            intervalDays = o.optDouble("intervalDays", 0.0), easeFactor = o.optDouble("easeFactor", 2.5),
+            repetitions = o.optInt("repetitions", 0), lapseCount = o.optInt("lapseCount", 0),
+            learningState = o.optString("learningState", "New"), correctCount = o.optInt("correctCount", 0),
+            incorrectCount = o.optInt("incorrectCount", 0)
         )
     }
     val collections = mutableListOf<CollectionEntity>()
@@ -639,10 +586,23 @@ private suspend fun importBackup(context: Context, database: StudyDatabase, uri:
         val o = lArray.getJSONObject(i)
         links += QuestionCollectionCrossRef(o.getString("questionId"), o.getString("collectionId"))
     }
+    val reviewLogs = mutableListOf<ReviewLogEntity>()
+    val reviewArray = root.optJSONArray("reviewLogs") ?: JSONArray()
+    for (i in 0 until reviewArray.length()) {
+        val o = reviewArray.getJSONObject(i)
+        reviewLogs += ReviewLogEntity(
+            id = o.getString("id"), questionId = o.getString("questionId"),
+            reviewedAt = o.optLong("reviewedAt", System.currentTimeMillis()), rating = o.optString("rating", "Good"),
+            wasCorrect = if (o.isNull("wasCorrect")) null else o.optBoolean("wasCorrect"),
+            mistakeCategory = o.optString("mistakeCategory"), reviewMode = o.optString("reviewMode", "Review"),
+            scheduledDueAt = if (o.isNull("scheduledDueAt")) null else o.optLong("scheduledDueAt")
+        )
+    }
     database.withTransaction {
         val dao = database.dao()
         dao.upsertQuestions(questions)
         dao.upsertCollections(collections)
         dao.insertLinks(links)
+        if (reviewLogs.isNotEmpty()) dao.insertReviewLogs(reviewLogs)
     }
 }

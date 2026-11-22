@@ -1,102 +1,124 @@
-# StudyForge 1.0.0
+# StudyForge 2.0.0
 
-StudyForge is an offline-first Android question library and study app. The first release focuses on personal use and local data storage. It is designed so later versions can add adaptive spaced repetition, dynamic numerical questions, AI generation, and optional cloud sync without putting provider secrets in the Android app.
+StudyForge is an offline-first Android question library and study app. Version 2.0 adds a learning engine: scheduled reviews, review history, mistake tracking, progress analytics, and a timed MCQ exam mode. Your question library remains local and works without an account.
 
-## Included in this first build
+## What's included in 2.0.0
 
+### Library and authoring
 - Local Room database; no account or internet connection is required for normal use.
 - Question library with search and filters for Flashcards and MCQs.
-- Create and edit flashcards and MCQs, including explanations, subject/chapter/topic, tags, status, and a LaTeX source field.
+- Create/edit questions with explanations, subject, chapter, topic, tags, status, MCQ options, and LaTeX source text.
 - Collections with many-to-many links: one question can belong to multiple collections.
-- Study screen with answer reveal for flashcards and answer checking for MCQs.
-- Basic review count and last-reviewed timestamp.
-- JSON backup and restore, including question data, collections, collection links, and review counts.
-- GitHub Actions workflow that builds a debug APK after a push to `main` or on manual request.
+- JSON backup and restore, now including review history and scheduling data.
 
-## Known 1.0 limitations
+### Learning engine
+- **Due mode:** works through new and due questions first.
+- **All mode:** review the complete library.
+- **Practice mode:** practice without changing the review schedule.
+- **Again / Hard / Good / Easy ratings:** a transparent SM-2-inspired interval scheduler assigns the next due date. Again schedules a 10-minute relearning step; the other ratings set longer intervals.
+- **Review history:** each scheduled review records its time, rating, mode, correctness (when known), and mistake category.
+- **Mistake tracking:** classify incorrect MCQs as concept gap, wrong formula, calculation/algebra, unit conversion, sign/direction, misread question, forgotten fact, or guess/uncertainty.
+- **Exam mode:** up to 10 randomly selected MCQs in a 15-minute session, with a results summary and review-history updates.
+- **Progress screen:** due count, review count, overall and recent accuracy, learning status, common mistake categories, and topics with incorrect answers.
 
-- LaTeX source is saved as text; rendered equation preview is planned for a later 1.x release.
-- Review ratings are recorded as review counts only. FSRS-style scheduling, mistake categories, analytics, exam mode, and dynamic numerical templates are planned for Version 2.0 and Version 3.0.
-- AI generation, server-side API publishing, account login, and cloud sync are not included. No AI API key should ever be placed in this Android project.
-- The Study screen currently cycles through the full question library; collection-specific study filters will be added in a later update.
+### Data safety and compatibility
+- Database migration from Version 1 to Version 2 adds scheduler fields and review logs without deleting existing questions or collections.
+- Version 2 imports both Version 1 and Version 2 JSON backups.
+- Version 2 exports questions, collections, links, scheduling state, and review logs.
+- Editing a question preserves its review schedule and history.
+
+## Known limitations in 2.0.0
+
+- The scheduler is a simple, transparent SM-2-inspired implementation, **not FSRS**.
+- LaTeX is saved as source text; it is not yet rendered as formatted mathematics.
+- Exam mode currently tests MCQs only. The test is limited to 10 questions and has a fixed 15-minute time limit.
+- Progress analytics are based on stored review history; imported Version 1 backups have review counts but no historic individual review records.
+- Dynamic numerical question templates, deterministic unit-aware calculation, AI generation, external publishing API, and cloud sync are not included yet.
 
 ## Build an APK without a computer
 
-You can upload the source from an Android phone using Termux. The APK is built on GitHub's cloud runner, not on your phone.
+The APK is built on GitHub's cloud runner. You can manage the source from an Android phone using Termux.
 
-### 1. Create a GitHub repository
+### First upload to GitHub
 
-Create a new empty repository named `StudyForge` on GitHub. Do not add a README or licence there because this ZIP already contains the project files.
-
-### 2. Extract and upload with Termux
-
-Install Termux from a trusted distribution source, then run:
+1. Create an empty GitHub repository named `StudyForge` (do not add a README or licence).
+2. Extract this ZIP. In Termux, install Git and unzip if needed:
 
 ```bash
-pkg update && pkg upgrade
+pkg update
 pkg install git unzip
 termux-setup-storage
+cd ~/storage/downloads
+unzip -o StudyForge-v2.0.0-source.zip
+cd StudyForge
 ```
 
-Place `StudyForge-v1.0.0.zip` in your phone's Download folder. Then run:
+3. Initialise and push the repository (set your own Git identity once):
 
 ```bash
-cd ~/storage/downloads
-unzip StudyForge-v1.0.0.zip
-cd StudyForge
-
 git init
-# Set these once on your Termux installation, using your own details:
 git config --global user.name "Your Name"
 git config --global user.email "YOUR-EMAIL@example.com"
 git add .
-git commit -m "Initial StudyForge 1.0"
+git commit -m "Initial StudyForge 2.0.0"
 git branch -M main
 git remote add origin https://github.com/YOUR-USERNAME/StudyForge.git
 git push -u origin main
 ```
 
-Replace `YOUR-USERNAME` with your GitHub username. When GitHub asks you to authenticate, use its normal sign-in/token flow; never paste a token into a public script or commit it to this repository.
+Replace the username and email placeholders with your own details. Authenticate through GitHub's normal sign-in/token flow. Never place an access token in the source code or a public file.
 
-### 3. Download the APK from GitHub
+### Updating an existing StudyForge Git repository
 
-1. Open your repository on GitHub.
-2. Open the **Actions** tab.
-3. Select **Build StudyForge APK** and open the latest successful run.
-4. In **Artifacts**, download `StudyForge-debug-apk`.
-5. Extract the artifact ZIP; it contains `app-debug.apk`.
-6. Open the APK on your phone and follow Android's installation prompt.
+First download this ZIP into your phone's Downloads folder. In Termux, extract its `StudyForge` folder to a temporary location, copy the updated project files over your existing Git checkout, then commit and push:
 
-The first build may take several minutes because GitHub needs to download the Android build dependencies. If the workflow fails, open the failed run and copy the first red error section; that is the useful part to diagnose.
+```bash
+pkg install unzip git
+termux-setup-storage
+mkdir -p ~/studyforge-update
+unzip -o ~/storage/downloads/StudyForge-v2.0.0-source.zip -d ~/studyforge-update
+cd /path/to/your/existing/StudyForge
+cp -r ~/studyforge-update/StudyForge/. .
+git add -A
+git commit -m "StudyForge 2.0.0 learning engine"
+git push
+rm -rf ~/studyforge-update
+```
+
+Replace `/path/to/your/existing/StudyForge` with the real location of your cloned or initialised repository. Do not run `git init` again inside an already existing repository.
+
+### Download the APK
+
+1. Open your GitHub repository and select **Actions**.
+2. Open the latest **Build StudyForge APK** run.
+3. Confirm the unit-test step and APK build both succeeded.
+4. Download the artifact named `StudyForge-2.0.0-debug-apk`.
+5. Extract the artifact ZIP and install `app-debug.apk`.
+
+Install the new APK over the existing StudyForge app. **Do not uninstall the old app first**; uninstalling can delete its local database. Export a JSON backup before updating as an extra precaution. The Version 1-to-2 database migration is designed to preserve existing questions and collections.
+
+If the workflow fails, copy the first red error section from the Actions log rather than only the final `BUILD FAILED` line.
 
 ## Project configuration
 
-- Package/application ID: `com.studyforge.app`
-- Minimum Android version: Android 8.0 (API 26)
-- Compile SDK: 36
-- Target SDK: 35
-- Language/UI: Kotlin + Jetpack Compose
-- Local storage: Room / SQLite
-- Build: Android Gradle Plugin 8.13.2, Gradle 8.13, Kotlin 2.2.10
+- Application ID: `com.studyforge.app`
+- Version: `2.0.0` (versionCode 3)
+- Minimum Android: Android 8.0 (API 26)
+- Compile SDK: 36; Target SDK: 35
+- Kotlin + Jetpack Compose
+- Room / SQLite local database
+- Java 17; Android Gradle Plugin 8.13.2; Gradle 8.13
 
-## JSON backup format
+## Backup format
 
-`backup-example.json` shows the version 1 structure. The importer checks `app` and `schemaVersion`. Keep the schema version when preparing compatible backup files.
+The exported JSON uses `schemaVersion: 2`. Version 2 supports the Version 1 backup format and fills new scheduler fields with safe defaults when importing old backups. See `backup-example.json` for a sample Version 2 structure.
 
-## Privacy and security
+## Privacy
 
-The app does not ask for an account and does not include AI provider credentials. The current app does not need network permission for its core functions. Keep backups private if they contain personal notes or study materials. Before adding any AI or cloud integration, use a server-side proxy and store secrets on the server, never in the APK or repository.
+Core library, study, scheduling, and analytics features are local. The current app does not need an account or AI provider key. Keep exported backups private if they contain your personal notes. AI or cloud features must use a server-side secret store/proxy in a later release; never put provider API keys in the Android app or Git repository.
 
-## Roadmap
+## Project logs
 
-- **1.0 Core app:** local question library, collections, flashcards, MCQs, and JSON backup/restore.
-- **1.x improvements:** rendered LaTeX preview, collection-specific study, sorting, and richer editor blocks.
-- **2.0 Learning engine:** spaced repetition, exam/practice modes, mistake tracking, and weak-topic analytics.
-- **3.0 Advanced question engine:** dynamic numerical templates, deterministic calculation, tolerances, and step-by-step derivations.
-- **4.0 AI and automation:** provider-independent AI generation, draft review, external publishing API, and workflow imports.
-- **5.0 Cloud and expansion:** optional accounts, sync, conflict resolution, and multi-device support.
-
-
-## Version 1.0.1 build fix
-
-If you received the earlier `Unresolved reference: platform` error at `app/build.gradle.kts`, use this updated source archive. The Compose BOM is now declared correctly inside the `dependencies` block. The Gradle 8.13 lifecycle message is only a warning.
+- `CHANGELOG.md` — release-by-release record of completed changes.
+- `ROADMAP.md` — what is completed, in progress, and planned next.
+- `DEVELOPMENT_LOG.md` — concise development status and verification notes.
