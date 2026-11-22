@@ -35,7 +35,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
-          name: StudyForge-2.0.0-debug-apk
+          name: StudyForge-2.0.1-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

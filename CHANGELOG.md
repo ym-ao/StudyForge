@@ -2,6 +2,17 @@
 
 All notable StudyForge changes are recorded here. Newest release first.
 
+## [2.0.1] - 2026-11-23
+
+### Fixed
+- Corrected the Room `Migration` import to `androidx.room.migration.Migration`, fixing Kotlin compilation in the database migration.
+- Updated the debug APK artifact name and app metadata to 2.0.1 (versionCode 4).
+
+### Verification
+- Confirmed the erroneous import is removed and the migration class uses the Room migration package.
+- GitHub Actions build is still required to verify Kotlin compilation and APK assembly.
+
+
 ## [2.0.0] - 2026-11-23
 
 ### Added

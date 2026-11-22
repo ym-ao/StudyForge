@@ -1,9 +1,17 @@
 # StudyForge Development Log
 
-## Current release: 2.0.0
+## Current release: 2.0.1
 
 **Date:** 2026-11-23  
 **Release status:** Source package prepared; Android cloud build must be confirmed by GitHub Actions.
+
+### 2.0.1 patch — 2026-11-23
+
+- Fixed `StudyDatabase.kt` to import `androidx.room.migration.Migration` instead of the invalid `androidx.room.Migration` package.
+- Bumped app metadata to version 2.0.1 (versionCode 4).
+- Updated the GitHub Actions artifact name and README instructions.
+- Static check confirms the source no longer contains the invalid import.
+- Full Android compilation remains unverified until GitHub Actions completes successfully.
 
 ### Completed in this release
 

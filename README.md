@@ -1,8 +1,8 @@
-# StudyForge 2.0.0
+# StudyForge 2.0.1
 
 StudyForge is an offline-first Android question library and study app. Version 2.0 adds a learning engine: scheduled reviews, review history, mistake tracking, progress analytics, and a timed MCQ exam mode. Your question library remains local and works without an account.
 
-## What's included in 2.0.0
+## What's included in 2.0.1
 
 ### Library and authoring
 - Local Room database; no account or internet connection is required for normal use.
@@ -27,7 +27,7 @@ StudyForge is an offline-first Android question library and study app. Version 2
 - Version 2 exports questions, collections, links, scheduling state, and review logs.
 - Editing a question preserves its review schedule and history.
 
-## Known limitations in 2.0.0
+## Known limitations in 2.0.1
 
 - The scheduler is a simple, transparent SM-2-inspired implementation, **not FSRS**.
 - LaTeX is saved as source text; it is not yet rendered as formatted mathematics.
@@ -49,7 +49,7 @@ pkg update
 pkg install git unzip
 termux-setup-storage
 cd ~/storage/downloads
-unzip -o StudyForge-v2.0.0-source.zip
+unzip -o StudyForge-v2.0.1-source.zip
 cd StudyForge
 ```
 
@@ -60,7 +60,7 @@ git init
 git config --global user.name "Your Name"
 git config --global user.email "YOUR-EMAIL@example.com"
 git add .
-git commit -m "Initial StudyForge 2.0.0"
+git commit -m "StudyForge 2.0.1 patch release"
 git branch -M main
 git remote add origin https://github.com/YOUR-USERNAME/StudyForge.git
 git push -u origin main
@@ -76,11 +76,11 @@ First download this ZIP into your phone's Downloads folder. In Termux, extract i
 pkg install unzip git
 termux-setup-storage
 mkdir -p ~/studyforge-update
-unzip -o ~/storage/downloads/StudyForge-v2.0.0-source.zip -d ~/studyforge-update
+unzip -o ~/storage/downloads/StudyForge-v2.0.1-source.zip -d ~/studyforge-update
 cd /path/to/your/existing/StudyForge
 cp -r ~/studyforge-update/StudyForge/. .
 git add -A
-git commit -m "StudyForge 2.0.0 learning engine"
+git commit -m "Fix Room migration import"
 git push
 rm -rf ~/studyforge-update
 ```
@@ -92,7 +92,7 @@ Replace `/path/to/your/existing/StudyForge` with the real location of your clone
 1. Open your GitHub repository and select **Actions**.
 2. Open the latest **Build StudyForge APK** run.
 3. Confirm the unit-test step and APK build both succeeded.
-4. Download the artifact named `StudyForge-2.0.0-debug-apk`.
+4. Download the artifact named `StudyForge-2.0.1-debug-apk`.
 5. Extract the artifact ZIP and install `app-debug.apk`.
 
 Install the new APK over the existing StudyForge app. **Do not uninstall the old app first**; uninstalling can delete its local database. Export a JSON backup before updating as an extra precaution. The Version 1-to-2 database migration is designed to preserve existing questions and collections.
@@ -102,7 +102,7 @@ If the workflow fails, copy the first red error section from the Actions log rat
 ## Project configuration
 
 - Application ID: `com.studyforge.app`
-- Version: `2.0.0` (versionCode 3)
+- Version: `2.0.1` (versionCode 4)
 - Minimum Android: Android 8.0 (API 26)
 - Compile SDK: 36; Target SDK: 35
 - Kotlin + Jetpack Compose
