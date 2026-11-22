@@ -95,3 +95,8 @@ The app does not ask for an account and does not include AI provider credentials
 - **3.0 Advanced question engine:** dynamic numerical templates, deterministic calculation, tolerances, and step-by-step derivations.
 - **4.0 AI and automation:** provider-independent AI generation, draft review, external publishing API, and workflow imports.
 - **5.0 Cloud and expansion:** optional accounts, sync, conflict resolution, and multi-device support.
+
+
+## Version 1.0.1 build fix
+
+If you received the earlier `Unresolved reference: platform` error at `app/build.gradle.kts`, use this updated source archive. The Compose BOM is now declared correctly inside the `dependencies` block. The Gradle 8.13 lifecycle message is only a warning.
