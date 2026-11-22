@@ -1,0 +1,39 @@
+{
+  "app": "StudyForge",
+  "schemaVersion": 1,
+  "exportedAt": 1795305600000,
+  "questions": [
+    {
+      "id": "replace-with-a-unique-id",
+      "prompt": "What is average velocity?",
+      "answer": "Displacement divided by the time interval.",
+      "explanation": "Average velocity is a vector quantity because displacement has direction.",
+      "subject": "Physics",
+      "chapter": "Kinematics",
+      "topic": "Velocity",
+      "type": "Flashcard",
+      "optionsJson": "[]",
+      "latex": "v_{avg} = \\frac{\\Delta x}{\\Delta t}",
+      "tagsCsv": "MDCAT,formula",
+      "status": "Draft",
+      "createdAt": 1795305600000,
+      "updatedAt": 1795305600000,
+      "reviewCount": 0,
+      "lastReviewedAt": null
+    }
+  ],
+  "collections": [
+    {
+      "id": "replace-with-a-collection-id",
+      "name": "MDCAT Physics",
+      "description": "Physics questions for entry-test practice.",
+      "createdAt": 1795305600000
+    }
+  ],
+  "links": [
+    {
+      "questionId": "replace-with-a-unique-id",
+      "collectionId": "replace-with-a-collection-id"
+    }
+  ]
+}
