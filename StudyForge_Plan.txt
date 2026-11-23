@@ -1,0 +1,508 @@
+StudyForge — Android Learning App
+
+Product Plan and Development Blueprint
+
+Version: 1.0 Status: Planning baseline — no implementation started
+Primary user: Personal use initially; architecture should allow
+expansion to multiple users later Primary platform: Android Working
+project name: StudyForge (name can be changed)
+
+------------------------------------------------------------------------
+
+1. Vision and goals
+
+StudyForge is a customizable, offline-first Android learning and
+question-management system inspired by flashcard apps such as Anki, but
+designed to provide more control over:
+
+-   Question formats and rich content.
+-   Mathematical equations and step-by-step derivations.
+-   Dynamic numerical questions.
+-   AI-assisted question generation.
+-   External API-based question publishing.
+-   Review scheduling and learning analytics.
+-   Question organization, importing, exporting, backup, and
+    synchronization.
+
+The goal is not merely to reproduce Anki. The goal is to create a
+flexible question platform that can support MDCAT, board examinations,
+science subjects, mathematics, and other learning needs.
+
+Core principles: 1. User control: the user controls question content,
+formatting, organization, review settings, and publishing. 2.
+Offline-first: essential study and question-management features work
+without an internet connection. 3. Extensible architecture: new question
+types and AI providers can be added without redesigning the entire app.
+4. Reliable answers: deterministic calculation and validation should be
+used wherever possible rather than trusting AI-generated answers
+blindly. 5. Data ownership: provide usable export, backup, and restore
+options.
+
+2. Confirmed product decisions
+
+-   Build an Android application.
+-   Initial use is personal, but keep the architecture expandable for
+    other users.
+-   Local use must not require an account.
+-   Cloud accounts and synchronization should be optional.
+-   Support both in-app AI generation and external API/dashboard
+    publishing.
+-   Also support custom scripts and structured JSON workflows.
+-   The app should work offline for downloaded content and local study.
+-   Use GitHub as the source-code repository.
+-   Use GitHub Actions to build APKs in the cloud, avoiding the need for
+    a computer.
+-   Deliver a GitHub-ready ZIP containing the complete source project
+    and build workflow.
+-   The user will upload/push the project using Termux on Android.
+
+3. Main app areas
+
+3.1 Home and study dashboard
+
+-   Overview of due reviews, new questions, learning progress, and
+    recent activity.
+-   Quick access to subjects, collections, search, and study modes.
+-   Configurable daily study targets.
+-   Study calendar and revision reminders as a later enhancement.
+
+3.2 Question library
+
+-   A central question library independent of decks or collections.
+-   Store each question once and allow it to appear in multiple
+    collections.
+-   Subjects, chapters, topics, subtopics, tags, and custom collections.
+-   Multiple tags per question.
+-   Search and filtering across the entire library.
+-   Source information such as textbook, chapter, page, document, or
+    custom source.
+-   Question status: draft, unverified, verified, incorrect, archived.
+-   Difficulty and exam labels such as MDCAT and board examinations.
+-   Duplicate detection.
+-   Bulk selection and bulk editing.
+
+Example organization: MDCAT Physics Kinematics Vectors Dynamics
+Chemistry Biology
+
+A question may belong to more than one collection without creating
+duplicate copies or separate review histories.
+
+3.3 Rich question editor
+
+Questions must not be restricted to plain text front/back cards.
+
+Support structured content blocks: - Plain text and paragraphs. -
+Headings and lists. - Bold, italic, underline, highlights, and text
+styling. - Inline and display LaTeX equations. - Mathematical and
+scientific symbols. - Images and diagrams. - Tables. - Graphs where
+supported. - Multiple-choice options. - Hints. - Answers and detailed
+explanations. - Step-by-step solutions and derivations. - Units and
+scientific notation. - Optional audio support as a later enhancement.
+
+Equation requirements: - Render equations cleanly instead of displaying
+raw LaTeX. - Support inline and display equations. - Preserve editable
+equation source. - Allow copying equation source. - Support equation
+blocks inside questions, answers, hints, and explanations. - Plan for a
+reliable MathJax or KaTeX-based rendering approach compatible with
+Android.
+
+3.4 Supported question formats
+
+Initial planned formats: 1. Basic flashcard: prompt on one side, answer
+on the other. 2. Multiple-choice question: options, correct answer,
+explanation, and optional distractor feedback. 3. Numerical question:
+learner enters a calculated answer. 4. Cloze deletion: missing words,
+values, symbols, or equation sections. 5. Equation derivation: reveal or
+enter derivation steps progressively. 6. True/false. 7. Image-based
+question: identify, label, or interpret an image or diagram. 8. Dynamic
+template: generate question variants from variables and rules.
+
+Future formats may include: - Image occlusion for diagrams and
+anatomy. - Matching and ordering. - Multi-select questions. -
+Short-answer questions. - Audio/listening questions. - Multi-part
+questions. - Questions with partial-credit marking.
+
+The question model should be extensible so additional formats can be
+introduced without a database redesign.
+
+4. Dynamic numerical question engine
+
+This is a major differentiating feature.
+
+A reusable template should define: - Question text and content blocks. -
+Variables and allowed ranges. - Integer, decimal, and fractional value
+rules. - Constraints between variables. - Units and unit conversions. -
+Formula or calculation logic. - Correct-answer generation. - Answer
+format and accepted tolerance. - Rounding rules and significant
+figures. - Difficulty settings. - Explanation template with substituted
+values. - Distractor-generation rules for MCQs. - Optional reproducible
+random seed or variant identifier.
+
+Example: Question template: A body moves with initial velocity {u},
+acceleration {a}, and time {t}. Calculate its final velocity.
+
+Formula: v = u + at
+
+The engine selects permitted values, computes the answer, substitutes
+the values into the explanation, and creates a new variant.
+
+Required safeguards: - Use deterministic code/formula evaluation for
+answers, not an AI model’s unsupported claim. - Validate variable ranges
+and constraints. - Prevent invalid or physically impossible combinations
+where relevant. - Handle units consistently. - Support decimal precision
+and answer tolerances. - Validate generated variants before presenting
+them. - Keep a record of the template and variant so a question can be
+reproduced.
+
+5. Learning and study modes
+
+Planned modes: - Flashcard review. - Quiz mode with immediate or delayed
+feedback. - Step-by-step mode for derivations and worked solutions. -
+Exam mode with timer, navigation, marking, scoring, and review. -
+Practice mode that does not change spaced-repetition scheduling. -
+Random practice. - Ordered practice. - Topic-focused practice. -
+Weak-area practice. - Numerical practice. - Optional custom sessions.
+
+Exam mode should eventually support: - Configurable question count and
+duration. - Navigation between questions. - Mark for review. - Submit
+confirmation. - Results and explanations. - Topic-wise performance
+report.
+
+6. Spaced repetition and review scheduler
+
+Do not simply hardcode Anki’s behavior. Make the scheduler configurable.
+
+Planned features: - FSRS-style scheduling support as a target. -
+Adjustable new-question limits. - Adjustable review limits. -
+Configurable review intervals where appropriate. - Forgotten-question
+recovery. - Difficult-question tracking. - Manual scheduling controls. -
+Due, new, learning, and relearning states. - Review history and answer
+ratings. - Separate practice mode that does not affect scheduling. -
+Choice of review order: priority, chronological, random, or custom. -
+Ability to review a collection or topic independently.
+
+Keep the scheduling engine modular so its algorithm can be changed or
+improved without changing question content.
+
+7. Mistake tracking and learning analytics
+
+Track more than correct/incorrect totals.
+
+When a learner makes a mistake, allow classification such as: - Concept
+not understood. - Wrong formula selected. - Calculation or algebra
+error. - Unit conversion error. - Sign or direction error. - Misread
+question. - Forgotten fact. - Guess or uncertainty. - Other/custom
+reason.
+
+Analytics should show: - Accuracy by subject, chapter, topic, and
+question type. - Frequently missed questions. - Repeated mistakes. -
+Review consistency. - Time spent, if measured reliably. - Progress over
+time. - Weak skills and topics. - Suggested targeted practice.
+
+Example skill categories for physics: - Formula selection. - Unit
+conversions. - Algebra. - Conceptual understanding.
+
+Do not present illustrative scores as real results. Analytics must be
+based on recorded study activity.
+
+8. AI integration and question-generation pipeline
+
+Support multiple AI providers through a provider-independent interface.
+
+Planned capabilities: - Generate questions from prompts. - Generate from
+pasted notes or supplied study material. - Generate MCQs, short answers,
+cloze cards, numerical templates, and explanations. - Generate multiple
+difficulty levels. - Suggest tags, topics, and question types. - Produce
+structured output suitable for import. - Allow user review and editing
+before publishing. - Support in-app generation and external generation
+workflows. - Allow provider/model configuration where supported. - Avoid
+locking the app to one AI company or model.
+
+AI publishing pipeline: 1. Generate: AI or external tool creates
+structured question data. 2. Parse: validate the structure and required
+fields. 3. Validate: check formatting, missing data, duplicates, and
+deterministic calculations where possible. 4. Review: user approves,
+edits, or rejects. 5. Publish: approved content enters the question
+library. 6. Synchronize: publish to the user’s devices or local app.
+
+Important safeguards: - AI-generated questions should be drafts or
+unverified by default. - Do not silently mark AI-generated answers as
+verified. - Keep source/provenance information. - Provide an easy way to
+report or correct errors. - Never expose private API keys in the Android
+APK or public GitHub repository.
+
+9. External API, dashboard, scripts, and structured imports
+
+The app should support more than one content-entry method.
+
+Question input methods: 1. Create and edit inside Android. 2. Generate
+using AI inside Android. 3. Push questions through an external API or
+dashboard. 4. Import JSON. 5. Import CSV for simple question types. 6.
+Import compatible Anki content where feasible. 7. Use custom scripts to
+create or publish question data.
+
+JSON should be the primary interchange format because it can represent
+nested content, equations, images, question types, explanations,
+validation rules, and dynamic templates.
+
+CSV should be supported for simpler tabular question formats.
+
+External publishing should support: - Authentication appropriate to the
+chosen backend. - Draft and publish states. - Batch uploads. -
+Validation responses and useful error messages. - Duplicate handling. -
+Update existing questions without creating duplicates. - Version
+information. - Optional source and collection assignment.
+
+A web dashboard may be added for convenient bulk editing and publishing,
+but the initial Android app must remain usable without it.
+
+10. Data model and question schema
+
+Design a versioned, extensible question schema.
+
+A question may contain: - Stable question ID. - Schema version. -
+Question type. - Structured prompt/content blocks. - Answer data. -
+Explanation blocks. - Hints. - Options and distractors. - Correct-answer
+validation rules. - Dynamic template definition and variables. -
+Subject, chapter, topic, tags, and collections. - Difficulty and exam
+labels. - Source/provenance. - Draft/verification status. - Created and
+modified timestamps. - Version history. - Optional media references. -
+Review metadata stored separately from question content.
+
+Keep question content separate from review history and scheduling data.
+Editing the content should not automatically erase the learner’s review
+history.
+
+Use stable IDs so imports, updates, and synchronization can identify the
+same question reliably.
+
+11. Question versioning and history
+
+-   Preserve prior versions when a question is edited.
+-   Show what changed.
+-   Restore an older version.
+-   Keep review history when appropriate.
+-   Track who or what generated or changed the question.
+-   Record source and generation metadata.
+-   Allow incorrect questions to be flagged and corrected.
+-   Do not silently overwrite user edits during synchronization.
+
+12. Search, filters, and organization
+
+Search/filter dimensions: - Subject. - Chapter. - Topic and subtopic. -
+Question format. - Difficulty. - Exam or curriculum. - Tags. -
+Draft/verified/incorrect status. - Source. - Performance and frequently
+missed status. - Date created or modified. - Collection.
+
+Support saved filters or smart collections as a later enhancement.
+
+13. Offline-first storage and cloud synchronization
+
+Local app: - Store questions and review history on-device. - Allow study
+without internet. - Allow local question creation and editing. - Allow
+access to downloaded explanations and media. - Generate variants from
+locally available templates. - Queue cloud changes until connectivity
+returns.
+
+Cloud: - Optional account and synchronization. - Cloud backup and
+restore. - Sync across devices. - Conflict detection and resolution. -
+Avoid silent overwrites. - Clear sync status and error reporting.
+
+Local use must not require an account. Cloud features should be
+optional.
+
+14. Backup, import, and export
+
+-   Export a complete question library.
+-   Export selected collections.
+-   Export review history and scheduling data.
+-   Import JSON.
+-   Import CSV.
+-   Support Anki import where feasible.
+-   Backup and restore.
+-   Duplicate detection during imports.
+-   Preview and validate before importing.
+-   Provide clear import error reports.
+-   Keep a portable format so the user is not locked into StudyForge.
+
+15. User interface and accessibility
+
+-   Modern Android interface using Jetpack Compose.
+-   Light and dark themes.
+-   Customizable appearance.
+-   Clear typography and readable equations.
+-   Responsive layouts for different screen sizes.
+-   Fast navigation between library, editor, review, and analytics.
+-   Accessible controls and sensible touch targets.
+-   Avoid excessive animations that make studying slower.
+-   Allow question display preferences where useful.
+
+16. Proposed technical architecture
+
+Initial recommended technology: - Android: Kotlin. - UI: Jetpack
+Compose. - Local database: Room. - Background work/synchronization:
+Android-compatible background task scheduling. - Equation rendering:
+evaluate MathJax or KaTeX integration for reliable Android rendering. -
+Cloud/backend: Supabase is the initial candidate, subject to a prototype
+and security review. - AI: provider-independent backend integration. -
+Build: Gradle. - Repository: GitHub. - APK build: GitHub Actions.
+
+Architectural modules to consider: 1. App UI and navigation. 2. Question
+library/domain model. 3. Rich content and rendering. 4. Question editor.
+5. Dynamic numerical engine. 6. Review scheduler. 7. Study sessions and
+exam engine. 8. Analytics and mistake tracking. 9. Import/export. 10.
+Local persistence. 11. Sync and conflict resolution. 12. AI/provider
+integration. 13. API publishing and validation.
+
+Keep AI, cloud synchronization, question rendering, and scheduling
+modular.
+
+17. Security and privacy
+
+-   Never commit API keys, passwords, signing secrets, or private
+    credentials to GitHub.
+-   Do not embed secret AI provider keys in the APK.
+-   Use a backend or secure server-side proxy for provider secrets.
+-   Use appropriate authentication for external publishing.
+-   Keep local-only use possible.
+-   Provide user-controlled backup and export.
+-   Request only necessary Android permissions.
+-   Explain what data is synchronized when cloud sync is enabled.
+-   Protect user data and handle errors without exposing secrets in
+    logs.
+
+18. Development roadmap
+
+Phase 0 — Planning and technical validation
+
+-   Finalize requirements.
+-   Define question schema.
+-   Define content-block format.
+-   Decide how equation rendering will work.
+-   Prototype dynamic numerical evaluation safely.
+-   Test Android build workflow from GitHub Actions.
+-   Confirm the project can be built and installed on the target phone.
+
+Phase 1 — Minimum useful offline app
+
+-   Android project and navigation.
+-   Local database.
+-   Subjects, topics, collections, and tags.
+-   Create, edit, delete, and search questions.
+-   Basic flashcards and MCQs.
+-   Rich text and LaTeX rendering.
+-   Local study and basic review history.
+-   JSON import/export.
+-   Backup/restore foundation.
+-   GitHub Actions APK build.
+
+Phase 2 — Learning engine
+
+-   Spaced repetition scheduler.
+-   Review ratings and due queues.
+-   Multiple study modes.
+-   Practice mode.
+-   Exam mode.
+-   Mistake classification.
+-   Basic performance analytics.
+
+Phase 3 — Advanced question engine
+
+-   Dynamic numerical templates.
+-   Variable constraints and randomization.
+-   Deterministic calculation and validation.
+-   Unit handling and answer tolerances.
+-   Step-by-step derivations.
+-   Automatic distractors with validation.
+-   Additional question formats.
+
+Phase 4 — AI and publishing
+
+-   In-app AI generation.
+-   Provider-independent integration.
+-   Structured generation output.
+-   Draft/review/approve/publish pipeline.
+-   External API publishing.
+-   Custom scripts and JSON workflows.
+-   Optional web dashboard.
+-   Secure backend handling of API keys.
+
+Phase 5 — Cloud and expansion
+
+-   Optional accounts.
+-   Cloud synchronization.
+-   Conflict handling.
+-   Multi-device support.
+-   Additional media types.
+-   Advanced analytics.
+-   Sharing and multi-user support if desired.
+
+19. Initial release acceptance checklist
+
+The first useful release should be considered ready only when: - The
+Android project builds successfully. - An APK can be produced by GitHub
+Actions. - The APK installs and launches on the target Android device. -
+A user can create, edit, delete, and search questions. - Questions
+remain available after closing and reopening the app. - At least basic
+flashcard and MCQ formats work. - Equations render correctly in
+supported content areas. - The app works for core local study without
+internet. - JSON export and import work for the supported initial
+schema. - Backup/restore has been tested. - No private API keys are
+committed or embedded. - Errors are understandable and do not silently
+lose data.
+
+20. Deferred or optional features
+
+These are useful but should not delay the first working release: - Audio
+and pronunciation questions. - Collaborative decks and sharing. -
+Advanced graph and diagram editors. - Image occlusion. - Advanced web
+dashboard. - Social features. - Complex multi-user permissions. -
+Additional AI providers beyond the first tested integration. - Advanced
+recommendation algorithms.
+
+21. Open technical decisions
+
+These require prototyping or confirmation before implementation: - Final
+project name and app package ID. - Final question JSON schema and
+migration policy. - Exact LaTeX rendering approach. - Whether Supabase
+is the best initial backend for the required sync and API workflow. -
+Dynamic formula evaluation implementation and supported expression
+syntax. - Image/media storage strategy. - Authentication method for
+external publishing. - Exact FSRS implementation and configuration. -
+Signing and release APK process. - Minimum Android version and device
+compatibility.
+
+22. Working rules for development
+
+-   Build in small, testable stages.
+-   Keep a working APK available at each meaningful milestone.
+-   Do not start cloud complexity before the local question library
+    works.
+-   Keep the question schema versioned from the beginning.
+-   Test imports and exports early.
+-   Test equations on the actual Android device.
+-   Use deterministic calculations for numerical answer checking.
+-   Keep AI output reviewable and correctable.
+-   Preserve question IDs and review history during edits and
+    migrations.
+-   Document build steps so the project can be maintained from Android
+    and Termux.
+-   Do not claim a feature is complete until it has been built and
+    tested.
+
+------------------------------------------------------------------------
+
+Current project status
+
+Requirements and product direction have been consolidated into this
+plan.
+
+No Android source project or APK has been built yet.
+
+Next recommended action: Create the technical design specification,
+including the initial database schema, question JSON examples,
+content-block model, module boundaries, and Phase 0 prototype checklist.
+Then create the GitHub-ready Android project and verify the cloud APK
+build.
+
+End of plan.

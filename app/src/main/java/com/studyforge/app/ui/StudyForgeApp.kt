@@ -247,7 +247,7 @@ private fun HomeScreen(
         ActionCard("Start studying", "Review flashcards and answer MCQs.", Icons.Default.School, onStudy)
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Version 2.0 • Learning engine", fontWeight = FontWeight.SemiBold)
+                Text("Version 2.1.0 • Signed release pipeline", fontWeight = FontWeight.SemiBold)
                 Text("StudyForge now schedules reviews, tracks mistakes, and summarizes weak topics. Your library stays on this device. Export a JSON backup regularly so you can move your work to another device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

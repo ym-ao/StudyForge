@@ -5,6 +5,18 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Release credentials are supplied only by the CI environment. Never hardcode
+// passwords or check the keystore into source control.
+val releaseStoreFilePath = System.getenv("SIGNING_STORE_FILE")
+val releaseStorePasswordValue = System.getenv("SIGNING_STORE_PASSWORD")
+val releaseKeyAliasValue = System.getenv("SIGNING_KEY_ALIAS")
+val releaseKeyPasswordValue = System.getenv("SIGNING_KEY_PASSWORD")
+val hasReleaseSigning = !releaseStoreFilePath.isNullOrBlank() &&
+    !releaseStorePasswordValue.isNullOrBlank() &&
+    !releaseKeyAliasValue.isNullOrBlank() &&
+    !releaseKeyPasswordValue.isNullOrBlank() &&
+    rootProject.file(releaseStoreFilePath).exists()
+
 android {
     namespace = "com.studyforge.app"
     compileSdk = 36
@@ -13,13 +25,27 @@ android {
         applicationId = "com.studyforge.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.0.1"
+        versionCode = 5
+        versionName = "2.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFilePath!!)
+                storePassword = releaseStorePasswordValue
+                keyAlias = releaseKeyAliasValue
+                keyPassword = releaseKeyPasswordValue
+            }
+        }
     }
 
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

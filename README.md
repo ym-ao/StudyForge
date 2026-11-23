@@ -1,8 +1,8 @@
-# StudyForge 2.0.1
+# StudyForge 2.1.0
 
 StudyForge is an offline-first Android question library and study app. Version 2.0 adds a learning engine: scheduled reviews, review history, mistake tracking, progress analytics, and a timed MCQ exam mode. Your question library remains local and works without an account.
 
-## What's included in 2.0.1
+## What's included in 2.1.0
 
 ### Library and authoring
 - Local Room database; no account or internet connection is required for normal use.
@@ -27,7 +27,7 @@ StudyForge is an offline-first Android question library and study app. Version 2
 - Version 2 exports questions, collections, links, scheduling state, and review logs.
 - Editing a question preserves its review schedule and history.
 
-## Known limitations in 2.0.1
+## Known limitations in 2.1.0
 
 - The scheduler is a simple, transparent SM-2-inspired implementation, **not FSRS**.
 - LaTeX is saved as source text; it is not yet rendered as formatted mathematics.
@@ -49,7 +49,7 @@ pkg update
 pkg install git unzip
 termux-setup-storage
 cd ~/storage/downloads
-unzip -o StudyForge-v2.0.1-source.zip
+unzip -o StudyForge-v2.1.0-self-contained-handoff.zip
 cd StudyForge
 ```
 
@@ -60,7 +60,7 @@ git init
 git config --global user.name "Your Name"
 git config --global user.email "YOUR-EMAIL@example.com"
 git add .
-git commit -m "StudyForge 2.0.1 patch release"
+git commit -m "StudyForge 2.1.0 patch release"
 git branch -M main
 git remote add origin https://github.com/YOUR-USERNAME/StudyForge.git
 git push -u origin main
@@ -76,11 +76,11 @@ First download this ZIP into your phone's Downloads folder. In Termux, extract i
 pkg install unzip git
 termux-setup-storage
 mkdir -p ~/studyforge-update
-unzip -o ~/storage/downloads/StudyForge-v2.0.1-source.zip -d ~/studyforge-update
+unzip -o ~/storage/downloads/StudyForge-v2.1.0-self-contained-handoff.zip -d ~/studyforge-update
 cd /path/to/your/existing/StudyForge
 cp -r ~/studyforge-update/StudyForge/. .
 git add -A
-git commit -m "Fix Room migration import"
+git commit -m "Update StudyForge to 2.1.0"
 git push
 rm -rf ~/studyforge-update
 ```
@@ -92,17 +92,25 @@ Replace `/path/to/your/existing/StudyForge` with the real location of your clone
 1. Open your GitHub repository and select **Actions**.
 2. Open the latest **Build StudyForge APK** run.
 3. Confirm the unit-test step and APK build both succeeded.
-4. Download the artifact named `StudyForge-2.0.1-debug-apk`.
-5. Extract the artifact ZIP and install `app-debug.apk`.
+4. When the four signing secrets are configured, download `StudyForge-2.1.0-release-apk` for normal installation and future updates. Otherwise, `StudyForge-2.1.0-debug-apk` is available for testing only.
+5. Extract the artifact ZIP and install the APK inside it.
 
-Install the new APK over the existing StudyForge app. **Do not uninstall the old app first**; uninstalling can delete its local database. Export a JSON backup before updating as an extra precaution. The Version 1-to-2 database migration is designed to preserve existing questions and collections.
+Always export a JSON backup before updating. For ordinary future updates signed with the same release key, install over the existing StudyForge app; do not uninstall it. For the first switch from the old debug-signed 2.0.1 app to the new release-signed APK, follow the one-time transition below. The database remains at version 2 in this source update.
 
 If the workflow fails, copy the first red error section from the Actions log rather than only the final `BUILD FAILED` line.
+
+## Signed release APKs and future updates
+
+The workflow can create a release-signed APK using a private key supplied through GitHub Actions secrets. Follow `SIGNING_SETUP.md` and use the separately supplied private keystore/credential files. Never add the keystore or passwords to this repository.
+
+**Important:** The earlier workflow artifacts were debug-signed. The first APK signed with the new release key will not update an installed copy that has a different signing certificate. Export and verify a JSON backup first. Then uninstall the old debug copy, install the signed release APK, and import the backup. This is a one-time transition; future releases must keep using the exact same key.
+
+The workflow artifacts are `StudyForge-2.1.0-debug-apk` and, when signing secrets are present, `StudyForge-2.1.0-release-apk`. A source ZIP alone does not prove that either artifact builds; check the actual GitHub Actions run.
 
 ## Project configuration
 
 - Application ID: `com.studyforge.app`
-- Version: `2.0.1` (versionCode 4)
+- Version: `2.1.0` (versionCode 5)
 - Minimum Android: Android 8.0 (API 26)
 - Compile SDK: 36; Target SDK: 35
 - Kotlin + Jetpack Compose
@@ -122,3 +130,24 @@ Core library, study, scheduling, and analytics features are local. The current a
 - `CHANGELOG.md` — release-by-release record of completed changes.
 - `ROADMAP.md` — what is completed, in progress, and planned next.
 - `DEVELOPMENT_LOG.md` — concise development status and verification notes.
+
+
+## Project documentation and new-chat handoff
+
+This source ZIP is designed to be uploaded into a fresh ChatGPT conversation so development can continue without depending on an earlier chat. Read these files before changing the project:
+
+- `PROJECT_PLAN.md` — current plan and approved five-major-version structure.
+- `StudyForge_Plan.txt` — original detailed product blueprint supplied by the user.
+- `IMPLEMENTATION_STATUS.md` — code-audited feature matrix showing implemented, partial, and not-started work.
+- `CHANGELOG.md` — release history.
+- `ROADMAP.md` — live roadmap and next release priorities.
+- `DEVELOPMENT_LOG.md` — dated implementation and decision history.
+- `BUILD_STATUS.md` — actual build/test evidence and known failures.
+- `HANDOFF_FOR_NEW_CHAT.md` — copy-paste prompt for continuing in a new chat.
+- `SIGNING_SETUP.md` — how to configure private GitHub Actions secrets and transition from debug to release signing.
+
+**Important:** the included app source is 2.1.0 (versionCode 5). No successful GitHub Actions run for this package has been supplied or verified yet. The source includes the previously corrected Room `Migration` import and a conditional signed-release pipeline. Configure signing secrets and inspect the Actions run before treating an APK as build-verified.
+
+### Remaining approved work
+
+The current 2.1.0 package adds release-signing infrastructure. It does not yet complete the planned FSRS scheduler, configurable review settings, rendered LaTeX, full filters/rich editor, or all regression tests. These original requirements remain open in `ROADMAP.md` and must not be removed from the plan. Version 3.0 remains reserved for the dynamic numerical question engine.

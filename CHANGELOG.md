@@ -1,6 +1,33 @@
 # Changelog
 
+## [Project documentation bundle] - 2026-11-23
+
+### Documentation only
+- Added the original product blueprint, current master plan, implementation-status audit, source file guide, and new-chat handoff prompt to the source package.
+- Updated the roadmap and build/development records to distinguish implemented source from incomplete planned features and unverified builds.
+- No application code or app version metadata changed in this documentation-only package update.
+
+
 All notable StudyForge changes are recorded here. Newest release first.
+
+## [2.1.0] - 2026-11-23
+
+### Added
+- Added optional Gradle release signing driven only by CI environment variables. No passwords or keystore are embedded in source.
+- Updated GitHub Actions to build and upload a signed release APK when repository signing secrets are configured, while retaining the debug APK artifact.
+- Added signing setup and first-install transition instructions, including the debug-to-release signature mismatch warning.
+- Added ignore rules for keystores and signing credential files.
+
+### Changed
+- Updated app version metadata to 2.1.0 (versionCode 5).
+- Updated workflow artifact names for 2.1.0.
+
+### Verification
+- Source/configuration changes were inspected in this package. Android Gradle tests, APK assembly, APK signature verification, and device installation are not yet verified; check the GitHub Actions run after configuring the repository secrets.
+
+### Still outstanding
+- FSRS scheduler, configurable review/exam settings, fully rendered offline LaTeX, expanded filters/study modes, and additional regression coverage remain approved requirements in the roadmap. This release does not mark those requirements complete.
+
 
 ## [2.0.1] - 2026-11-23
 

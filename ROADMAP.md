@@ -1,62 +1,103 @@
 # StudyForge Roadmap
 
-This file is the living plan. Every release must update both this roadmap and `CHANGELOG.md`.
+This is the live implementation roadmap. The five major versions below are the approved product plan. Smaller patch/minor releases may be used inside a major version.
 
-## Release status
+## Current release snapshot
 
-| Area | Status | Notes |
-|---|---|---|
-| Offline question library and collections | Complete (1.0) | Room database; multi-collection links |
-| Flashcards and MCQs | Complete (1.0) | Create, edit, search, study |
-| JSON backup and restore | Complete (1.0), expanded (2.0) | V2 includes schedules and review logs; V1 import remains supported |
-| Scheduled review and ratings | Complete (2.0) | Simple SM-2-inspired scheduler, not FSRS |
-| Practice and timed MCQ exam | Complete (2.0) | Practice is schedule-neutral; exam up to 10 MCQs / 15 minutes |
-| Mistake tracking and progress | Complete (2.0) | Review history, accuracy, weak topics, mistake categories |
-| Rendered LaTeX | Planned | Preserve source editing and display rendered equations |
-| Dynamic numerical questions | Planned | Deterministic variable templates, constraints, units, tolerance, worked substitutions |
-| Advanced rich-content question blocks | Planned | Cloze, step-by-step derivations, images, tables, graphs, multipart questions |
-| AI-assisted question generation | Planned | Draft-first, review/approve, provider-independent backend |
-| External API / publishing workflows | Planned | Authenticated batch validation and publish/update pipeline |
-| Optional cloud sync and accounts | Planned | Backend proxy, conflict handling, multi-device sync |
+- **Current source version:** 2.1.0
+- **versionCode:** 5
+- **Room database version:** 2
+- **JSON backup schema:** 2 (import accepts versions 1 and 2)
+- **Build status:** Not verified for this source ZIP; CI must pass after the signing secrets are configured.
+- **Device status:** No confirmed install/update test recorded for this source ZIP.
 
-## Next release: Version 2.1 (recommended)
+## Major version roadmap
 
-Focus on reliability and study usability before starting the larger AI/cloud work:
+### Version 1.0 — Core app
 
-1. Render LaTeX in prompts, answers, and explanations while retaining editable source.
-2. Add sorting and study filters for subject, chapter, topic, collection, and question status.
-3. Add configurable daily new/review limits, exam duration/question count, and review order.
-4. Add collection-specific study sessions and a review-history detail view.
-5. Add more tests for backup round-trips, migration compatibility, scheduler edge cases, and timer/answer checking.
+**Source foundation exists; milestone is not fully acceptance-complete.**
 
-## Version 3.0 — Dynamic question engine
+- [x] Local question library and Room persistence.
+- [x] Collections with many-to-many question links.
+- [x] Basic flashcards and MCQs.
+- [x] Basic editor fields, tags, search, and type filter.
+- [x] JSON backup/import with schema versioning.
+- [x] GitHub Actions workflow source.
+- [x] Optional release-signing configuration and conditional signed APK workflow (requires GitHub repository secrets).
+- [ ] Full structured rich-content editor (content blocks, formatting, images/tables/graphs as scoped).
+- [ ] Proper rendered LaTeX in prompts, answers, hints, and explanations.
+- [ ] Full subject/chapter/topic/tag/collection/status filters.
+- [ ] Successful CI build and installation/update acceptance test for a release candidate.
 
-- Reusable numerical templates with bounded variables and constraints.
-- Deterministic answer calculation and reproducible variants.
-- Answer tolerances, units, conversions, rounding, and significant figures.
-- Step-by-step worked solutions with generated substitutions.
-- Distractor generation from explicit rules and validated calculations.
+### Version 2.0 — Learning engine
 
-## Version 4.0 — AI and automation
+**Foundation exists; milestone is not fully complete.**
 
-- In-app AI generation through a secure backend proxy.
-- Multiple provider/model configuration without embedding secrets in the APK.
-- Draft, validate, edit, approve, publish, and version question workflows.
-- JSON-first API and external publishing; CSV for simple content.
-- Optional web dashboard and script integration.
+- [ ] Replace/upgrade the current SM-2-inspired algorithm with the planned FSRS scheduler, after evaluating a compatible implementation and adding tests.
+- [x] Again / Hard / Good / Easy ratings and due-date scheduling (current scheduler is SM-2-inspired, not FSRS).
+- [x] Due, All, and Practice modes.
+- [x] Timed MCQ exam mode (currently fixed at 10 questions maximum and 15 minutes).
+- [x] Mistake categories and review logs.
+- [x] Basic progress/weak-topic reporting.
+- [ ] Configurable new/review limits and review settings.
+- [ ] Configurable exam count/duration and more complete exam navigation/settings.
+- [ ] More study modes (step-by-step, topic/weak-area/numerical/custom sessions and selectable order).
+- [ ] Stronger topic/subject/chapter/skill analytics.
+- [ ] Expanded migration, scheduler, backup round-trip, and exam tests.
 
-## Version 5.0 — Cloud and expansion
+### Version 3.0 — Advanced question engine
 
-- Optional accounts and cloud sync.
-- Multi-device conflict detection and resolution.
-- Secure media storage and backup management.
-- Shareable collections and collaboration only after core sync is reliable.
+**Not started in the supplied source.**
 
-## Release process
+- [ ] Dynamic numerical questions and variable-based templates.
+- [ ] Bounded variables, constraints, randomization, and reproducible variants.
+- [ ] Deterministic answer calculation and automatic answer checking.
+- [ ] Unit validation/conversions, answer tolerances, rounding, and significant figures.
+- [ ] Step-by-step derivations with substituted values.
+- [ ] Rule-based MCQ distractors with validation.
 
-For every version:
-1. Update the version name/code and migration if the database schema changes.
-2. Add completed work and known limitations to `CHANGELOG.md`.
-3. Update completed/in-progress/next items in this file and `DEVELOPMENT_LOG.md`.
-4. Add or update automated tests.
-5. Run GitHub Actions and verify the APK artifact before marking a release build as verified.
+### Version 4.0 — AI and automation
+
+**Not started in the supplied source.**
+
+- [ ] In-app AI generation.
+- [ ] Provider-independent integration and multiple provider/model support.
+- [ ] Secure backend proxy/secret storage; no private keys in APK/source.
+- [ ] JSON-first external publishing API and custom script workflows.
+- [ ] Validation pipeline: generate, parse, validate, review, approve, publish.
+- [ ] Draft/unverified default status and provenance/source tracking.
+- [ ] Optional web dashboard.
+
+### Version 5.0 — Cloud and expansion
+
+**Not started in the supplied source.**
+
+- [ ] Optional accounts; local-only mode remains available.
+- [ ] Cloud backup and synchronization.
+- [ ] Multi-device support and queued offline changes.
+- [ ] Conflict detection/resolution; no silent overwrites.
+- [ ] Advanced analytics.
+- [ ] Question/collection sharing and multi-user expansion if desired.
+
+## Current 2.1.0 release state and remaining scope
+
+The 2.1.0 source package adds secure optional release signing, CI support for a signed release artifact, and signing/installation documentation. The remaining approved Version 1/2 work is still required and remains in scope; it is not complete in this source ZIP:
+
+1. FSRS implementation and scheduler tests.
+2. User-configurable review limits, review order, and exam settings.
+3. Real offline LaTeX rendering while preserving source text.
+4. Better study filters and collection/topic-focused sessions.
+5. Expanded automated tests for database migrations, backup/restore, scheduler edge cases, and exam flow.
+6. GitHub Actions verification, followed by installation/update testing on the Android phone.
+
+Avoid introducing Version 3/4/5 features early unless the user changes the approved plan.
+
+## Release rules
+
+1. Keep release history; append to `CHANGELOG.md`.
+2. Update `PROJECT_PLAN.md`, this roadmap, `IMPLEMENTATION_STATUS.md`, `DEVELOPMENT_LOG.md`, and `BUILD_STATUS.md` for every release.
+3. Increment `versionCode`; keep `versionName` and artifact names consistent.
+4. Review Room migrations and JSON compatibility before data-model changes.
+5. Add tests for new logic and regression cases.
+6. Mark builds verified only after the actual GitHub Actions results pass.
+7. Keep complete source and all project records in each handoff ZIP.
