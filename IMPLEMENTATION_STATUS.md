@@ -1,86 +1,133 @@
-# Implementation status — StudyForge 2.1.2 source audit
+# Current source audit — StudyForge 2.1.11
 
-**Current source version:** 2.1.2 / versionCode 7  
-**Room database:** version 3 (migrations 1→2→3)  
-**JSON backup:** schema 3 (imports schema 1, 2, and 3)  
+**App:** 2.1.11 / versionCode 16  
+**Room:** schema 9; additive migrations 1→2→3→4→5→6→7→8→9  
+**JSON backup:** schema 9; import accepts 1–9  
+**Audit basis:** uploaded 2.1.10 source ZIP inspected, then source changes audited.
+
+| V1/V2 area | 2.1.11 source status | Boundary
+|---|---|---|
+| Saved study sessions | Implemented in source | Editable subject/chapter/topic/tag/difficulty/exam/type/status/performance/mode/limit filters; collection filter not included.
+| Structured derivations | Implemented in source | DERIVATION block format and stepwise reveal; equations are LaTeX strings, no symbolic algebra solver.
+| Multipart numeric grading | Implemented in source | Accepted text alternatives and absolute/relative tolerance; all-or-nothing per part remains.
+| Analytics | Expanded in source | 7-day activity, active review days, exam response accuracy, chapter mistakes; no persisted exam-attempt entity.
+| FSRS validation | Partial tests added | Published mathematical invariants tested; full upstream golden vectors still pending.
+| Room/backup validation | Partial | SQLite migration smoke scripts and schema-9 JSON static check passed; Room runtime and app-level round-trip pending.
+| CI/device acceptance | Not verified | No GitHub Actions run, signed APK or device test available.
+
+## 2.1.11 verification evidence
+
+- Standalone Kotlin harness passed for numeric absolute/relative tolerance, accepted alternatives, derivation parsing/validation and all saved-session criteria.
+- `tools/verify_migration_7_8.py`: 7 SQLite checks passed.
+- `tools/verify_migration_8_9.py`: existing question-part/session rows preserved and six added columns checked.
+- `tools/verify_backup_schema_9.py`: schema-9 example backup parsed and optional new fields checked.
+- Kotlin parser-only scan found no syntax diagnostics, but unresolved Android/Compose/Room symbols prevent treating it as a compile.
+- Original `StudyForge_Plan.txt` was not modified.
+
+# Implementation status — StudyForge 2.1.10 source audit
+
+**Current source version:** 2.1.10 / versionCode 15  
+**Room database:** version 8 (migrations 1→2→3→4→5→6→7→8)  
+**JSON backup:** schema 8 (imports schemas 1–8)  
 **Audit date:** 2026-11-23  
-**Verification boundary:** source inspection and static checks only. Android Gradle build, CI, on-device, migration runtime, and renderer tests are not yet verified.
+**Verification boundary:** source inspection plus focused local source/SQLite/JSON checks described in `BUILD_STATUS.md`. Full Android Gradle build, JUnit execution, GitHub Actions, Room runtime validation, signed APK, and device installation/update remain unverified.
 
 ## Status meanings
 
-- **Implemented in source:** corresponding source exists; not proof that it compiles or works on-device.
+- **Implemented in source:** corresponding code exists; not proof that it compiles or works correctly on-device.
 - **Partial:** a useful subset exists, but it does not satisfy the complete original requirement.
-- **Not implemented:** no corresponding feature was implemented in this release.
+- **Not implemented:** no corresponding implementation was added in this source release.
 - **CI/device verified:** only use after actual successful build/test and device evidence.
 
 ## Version 1.0 — Core app
 
-| Requirement | 2.1.2 source status | Notes |
+| Requirement | 2.1.8 source status | Notes |
 |---|---|---|
-| Question library and collections | Implemented in source | Room entities, DAO, collection cross-reference and UI remain present. |
-| Rich question editor | Partial | Prompt, answer, explanation, metadata, options, tags, status, collections, LaTeX field, and Markdown-like preview are present. Full structured blocks, in-editor formatting toolbar, images/diagrams, tables, graphs, and more advanced content widgets remain incomplete. |
-| LaTeX rendering | Implemented in source; device verification pending | `RaTeXView` native renderer integrated for the question equation field. Need verify actual APK packaging and offline rendering on Android. |
+| Question library and collections | Implemented in source | Room entities, DAO, collection cross-reference, library and collection UI remain present. |
+| Rich question editor | Partial / improved | Prompt/answer/explanation, metadata, formatting starter shortcuts and LaTeX field exist. Ordered TEXT/HEADING/LIST/LATEX blocks can be authored, reordered, deleted and rendered in study; image/media, tables, graphs and selection-aware editing remain incomplete. |
+| LaTeX rendering | Implemented in source; device verification pending | RaTeX renderer is integrated for the equation field. APK packaging and offline Android rendering still need verification. |
 | Flashcards and MCQs | Implemented in source | Both types can be created and studied; MCQs support answer checking. |
-| Tags and search | Partial / improved | Tags are stored and searchable; tag filter added. Dedicated tag manager and normalized tag model remain open. Search includes question, answer, explanation, subject, chapter, topic, and tags. |
-| Library filters | Partial / improved | Type, status, subject, chapter, topic, tag, and collection filters added. Difficulty, exam, performance, saved filters/presets remain open. |
-| Offline local database | Implemented in source; device test pending | Room local database; no remote service required for core use. |
-| JSON import/export | Implemented in source; round-trip test pending | Schema 3 exports FSRS memory state/settings and accepts schema 1, 2, and 3. Older backup imports retain current FSRS values for existing matching question IDs; absent legacy settings are left unchanged. |
-| Review history | Implemented in source | Existing review log data retained; practice mode does not record a review. |
-| GitHub Actions APK workflow | Implemented in source; CI not verified | Java 17/Gradle 8.13 workflow runs unit tests, builds debug, validates signing key, and conditionally builds signed release. |
+| Tags and search | Partial / improved | Tags are stored/searchable/filterable; a tag catalogue and create/rename/delete manager are implemented in 2.1.6 source. Room runtime validation is pending. |
+| Library filters | Implemented in source; runtime testing pending | Type, status, subject, chapter, topic, tag, collection, difficulty, exam and performance filters exist. Named presets can be saved, applied, updated by name, managed and deleted. |
+| Offline local database | Implemented in source; device test pending | Room local database; no remote service is required for core use. |
+| JSON import/export | Implemented in source; round-trip test pending | Schema 8 exports questions, collections, review logs, FSRS values, settings, learning-step state, saved filter presets, tag catalogue, content blocks, multipart parts and session presets. Import accepts schemas 1–8. |
+| Review history | Implemented in source | Review logs persist ratings, correctness, mistake category, mode and scheduled due timestamp. |
+| GitHub Actions APK workflow | Implemented in source; CI not verified | Workflow runs unit tests, builds debug, validates the existing signing key, and conditionally builds signed release. |
 
 ## Version 2.0 — Learning engine
 
-| Requirement | 2.1.2 source status | Notes |
+| Requirement | 2.1.8 source status | Notes |
 |---|---|---|
-| FSRS spaced repetition | Implemented in source; test validation pending | `ReviewScheduler.kt` implements FSRS-6 default parameters, stability/difficulty state, whole local study-day elapsed intervals, retrievability, same-day update, recall/forget updates, retention-target interval calculation, and rating mapping. Old SM-2 interval/ease values are used as a safe initial seed for legacy cards rather than discarded. A standalone Kotlin smoke test passed for key scheduling behaviours, but this is not a JUnit/CI result. Not yet validated against official FSRS test vectors or on-device traces. |
-| Due queue and ratings | Implemented in source | Again/Hard/Good/Easy, per-day caps for new and review cards, configurable ordering, and custom initial retry delay. Current retry setting uses the first valid numeric value; full multi-step sequence progression remains incomplete. |
-| Study modes | Partial / improved | Due, All, Practice (no scheduler/review write), Random, Ordered, Topic-focused, Weakest-first, and basic Step-by-step answer/explanation reveal. Structured derivation steps, numerical mode, and custom session builder remain open. |
-| Timed exams | Partial / improved | Configurable MCQ question count, duration, optional random order, mark-for-review, submit confirmation, score/results. Still MCQ-only; richer navigation grid, multiparts, partial credit and deeper exam configuration remain open. |
-| Mistake tracking | Implemented in source | Existing mistake categories and review logs retained; exam wrong answers logged as a generic exam mistake. |
-| Weak-topic analytics | Partial / improved | Accuracy, recent accuracy, topics, subjects, mistake categories from recorded activity; chapter/skill/time-series and broader analytics remain open. |
-| Custom review settings | Implemented in source; persistence test pending | Desired retention, max interval, new/review daily caps, order, retry delays, exam count/duration/randomization stored in Room and exported to backup. |
+| FSRS spaced repetition | Implemented in source; conformance validation pending | `ReviewScheduler.kt` contains FSRS-6 default parameters and state updates. Official reference-vector validation and CI tests remain pending. |
+| Due queue and ratings | Implemented in source | Again/Hard/Good/Easy, daily caps, order preferences, multi-step Learning/Relearning, and persisted step index. |
+| Study modes | Partial / improved | Due, All, Practice, Random, Ordered, Topic-focused, Weakest-first and basic answer/explanation Step-by-step. Structured derivations and numerical mode remain open; basic saved sessions can be saved/applied/deleted, but full session criteria editing remains open. |
+| Timed exams | Partial / improved | Configurable MCQ count/duration/random order, mark-for-review, submit confirmation, question navigation and score/difficulty breakdown. Multipart timed exam presentation, per-part answer capture and weighted all-or-nothing scoring are implemented in 2.1.10; advanced within-part partial credit remains open. |
+| Mistake tracking | Implemented in source | Mistake categories and review logs retained; exam wrong answers are recorded as an exam mistake. |
+| Weak-topic analytics | Partial / improved | Accuracy, recent accuracy, topics, subjects and mistake categories from recorded activity; deeper chapter/skill/time-series analytics remain open. |
+| Custom review settings | Implemented in source; persistence tests pending | Desired retention, max interval, daily limits, order, multi-step learning/relearning delays and exam settings are stored locally and exported. |
 
-## Version 3.0 — Advanced question engine
+## 2.1.6 additions (historical)
 
-Not implemented in 2.1.2; remains reserved for deterministic dynamic numerical questions, variables/constraints, unit validation/tolerances, step-by-step numerical derivations, and validated distractors.
+- Dedicated Library tag manager supports create, rename, delete, and question-usage counts.
+- Normalized tag catalogue table added through Room migration 6→7; legacy `tagsCsv` on questions remains supported.
+- Rename/delete update affected question tag strings transactionally with exact tag matching.
+- JSON backup schema 7 includes tag catalogue; older schemas 1–6 remain importable and old question tags are rediscovered.
+- Five pure Kotlin tag-helper JUnit tests added; not executed by Android JUnit in this environment.
+- Full Gradle/KSP/Room build, migration runtime, backup round-trip, CI and device checks remain pending.
 
-## Version 4.0 — AI and automation
+## 2.1.5 additions
 
-Not implemented in 2.1.2; remains reserved for AI providers, secure server-side secret proxy, external publishing, validation pipeline, and optional dashboard.
+| Feature | Source status | Notes |
+|---|---|---|
+| Saved filter preset data model | Implemented in source | `SavedFilterPresetEntity` stores each criterion explicitly, with stable ID, name and timestamps. |
+| Save and update | Implemented in source | Save current search/filter state under a name; saving with a case-insensitive matching name updates the existing record ID. |
+| Apply saved preset | Implemented in source | Library chips restore all search/filter values, including optional collection ID. |
+| Manage/delete | Implemented in source | Manager lists saved presets; deletion requires confirmation. |
+| Collection deletion behavior | Implemented in migration/schema | Foreign key uses `ON DELETE SET NULL`; the preset survives and no longer filters by the deleted collection. |
+| Room migration | Implemented in source; SQLite smoke check passed, Room runtime pending | Migration 5→6 creates the preset table; migration 6→7 creates the tag catalogue and unique name index; prior migrations remain registered. |
+| JSON backup | Implemented in source; JSON shape check passed, full round-trip pending | Schema 7 exports/imports saved presets and tag catalogue; schemas 1–6 remain supported. Full Android export/import round-trip remains pending. |
+| Regression tests | Added in source; Android JUnit not run | Tests cover all-criteria mapping, defaults, name trimming, stable ID and timestamps on update. |
 
-## Version 5.0 — Cloud and expansion
 
-Not implemented in 2.1.2; remains reserved for accounts, sync, multi-device, conflict resolution, sharing, and multi-user features.
+## 2.1.7 additions — source implementation only
 
-## Data migration and compatibility audit
+| Capability | Status | Notes |
+|---|---|---|
+| Ordered rich-content block storage | Data model implemented; UI not implemented | `QuestionContentBlockEntity` supports kind, text, order, optional embedded Base64 media, MIME type and alt text. Current editor/study UI does not yet create or render these rows. |
+| Multipart question storage | Data model implemented; authoring/grading not implemented | `QuestionPartEntity` stores ordered parts, prompt/answer/explanation/options and points. Existing exam flow does not grade parts or partial credit. |
+| Saved custom-session storage | Data model implemented; UI/execution not implemented | `StudySessionPresetEntity` stores mode and filters plus question limit. No preset manager or session launcher is wired into the UI yet. |
+| Room migration 7→8 | Implemented in source; SQLite smoke test passed | Creates three additive tables and indices. Room runtime/KSP migration validation remains pending. |
+| JSON backup schema 8 | Implemented in source; full round trip pending | Exports/imports the three new models. Schemas 1–7 remain accepted. |
 
-- Room current version is 3. Migration 1→2 is retained; migration 2→3 adds `fsrsStability`, `fsrsDifficulty`, and `study_settings`. No destructive fallback or table replacement was introduced.
-- New FSRS question columns declare matching SQL defaults and migration defaults (`0.0`).
-- JSON schema 3 adds FSRS state and settings. Import range remains 1..3. Schema 1/2 remain supported.
-- The existing `StudyForge_Plan.txt` and five-major-version scope are retained unchanged.
-- No source code change should be treated as proof of safe migration. Test upgrade from a populated Room-v2 database and backup round-trip before device rollout.
+## 2.1.8 additions — user-facing workflow progress
 
-## Signing and CI
-
-- The fixed non-secret alias remains `studyforge-release`.
-- The workflow validates the existing private keystore before Gradle packaging.
-- Required GitHub secrets remain `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, and `SIGNING_KEY_PASSWORD`.
-- Never replace or regenerate the private key for this release; it is not included in this ZIP.
-- CI, signed APK certificate, migration runtime, and device install/update are **not yet verified**.
+| Capability | Status | Notes |
+|---|---|---|
+| Ordered text/heading/list/LaTeX blocks | Implemented in source | Editor supports create/edit/reorder/delete; study card renders these kinds. Image/media, tables, graphs and selection-aware formatting remain open. |
+| Multipart part authoring | Partial | Prompt, answer, explanation and positive points can be authored. Exam presentation, answer capture and weighted per-part grading were added in 2.1.10; advanced within-part partial credit remains open. |
+| Saved study-session presets | Partial / improved | Save/apply/delete works in source. Current UI captures mode, selected topic and question limit; full filter criteria controls remain open. |
+| Validation and filtering helpers | Implemented in source; tests added | Pure Kotlin helpers normalize child ordering/ownership, validate part content/points and filter saved sessions. Android JUnit has not been run. |
 
 ## Remaining accepted V1/V2 work
 
-1. Full structured rich editor, media, image/diagram blocks, tables, graphs, and editor toolbar.
-2. Difficulty/exam/performance filters and saved filter presets; proper tag manager.
-3. Multi-step learning and relearning progression and complete custom scheduler controls.
-4. Structured step-by-step derivation blocks and custom study session builder.
-5. Broader exam question types, navigation overview, partial credit/multipart results.
-6. Migration, backup round-trip, FSRS reference-vector, scheduler edge-case, and exam instrumented tests.
-7. GitHub Actions verification and real-device offline/update acceptance tests.
+1. Add image/media selection and offline rendering, plus table and graph block authoring/rendering and selection-aware formatting.
+2. Add structured derivation authoring and a true step-by-step derivation study UI.
+3. Connect multipart questions to exam presentation, answer capture, weighted partial-credit grading, and results review.
+4. Expand saved session editing to subject/chapter/tag/difficulty/exam criteria and richer launch configuration.
+5. Complete deeper analytics and review-recovery controls.
+6. Validate FSRS against upstream reference vectors; add Room runtime migration, JSON backup round-trip, scheduler and exam-flow tests.
+7. Verify GitHub Actions, signed APK identity, offline behavior, installation/update and backup restore on the Android device.
 
-These are **unfinished requirements**, not removed scope. Version 3/4/5 remain as in `PROJECT_PLAN.md` and `StudyForge_Plan.txt`.
+These are unfinished requirements, not removed scope. Version 3/4/5 remain as approved in `PROJECT_PLAN.md` and the original `StudyForge_Plan.txt`.
 
----
+## Data safety and signing
+
+- The existing question IDs, collection links, review history, FSRS memory state, settings, and signing identity remain compatibility requirements.
+- Migrations 5→6 and 6→7 are additive: they create the saved preset table and tag catalogue; existing question, collection, review and settings rows are not rebuilt.
+- Saved filter presets reference collections with `ON DELETE SET NULL`; they are not cascade-deleted with a collection.
+- Schema 1–6 backup imports do not delete current presets or tags. Schema 6+ imports merge saved presets by ID; schema 7 imports merge tag catalogue records.
+- The original `StudyForge_Plan.txt` is preserved byte-for-byte. The five major versions and all remaining requirements are retained.
+- Fixed signing alias remains `studyforge-release`; required Actions secrets remain `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, and `SIGNING_KEY_PASSWORD`. No key material is included.
 
 # Historical audit — 2.1.0 baseline (retained)
 
@@ -209,3 +256,66 @@ The release-signing infrastructure has been added, but the originally planned le
 | Clear signing failure | Implemented in workflow source | Validation fails before Gradle packaging and emits a targeted message. |
 | GitHub CI result | Not verified | Requires a real Actions run with the three signing secrets. |
 | Device update | Not verified | Requires installing the successful release APK on the phone. |
+
+
+## 2.1.8 additions — user-facing workflows implemented in source
+
+| Capability | Status | Notes |
+|---|---|---|
+| Ordered text/heading/list/LaTeX blocks | Implemented in source | Editor can add, edit, reorder and delete blocks. Blocks are stored in existing schema-8 table and shown in the study card. Image/media selection, tables and graph editing remain outstanding. |
+| Multipart part authoring | Partial | Editor can add, edit and delete part prompts, answers, explanations and positive point values. Part-aware exam presentation, answer capture and weighted partial-credit grading are not yet connected. |
+| Saved study-session presets | Partial / improved | Study screen can save, launch and delete named presets. Current UI saves mode, selected topic and question limit; the underlying model supports additional criteria, but editor controls for subject/chapter/tag/difficulty/exam are still outstanding. |
+| Authoring validation | Implemented in source | Pure helpers normalize block/part order and ownership, bound text/media fields, and reject blank part prompts/answers or invalid points. |
+| Regression tests | Added in source | Added tests for part validation, block/part normalization and session preset filtering. Android JUnit execution remains pending. |
+
+No Room migration or JSON schema change was needed: 2.1.8 connects the existing schema-8 structures to Compose UI and the existing backup paths.
+
+## Remaining accepted V1/V2 work after 2.1.8
+
+1. Image/media picker and offline image rendering, plus structured table and graph blocks.
+2. Selection-aware rich formatting and a full editor experience across all question fields.
+3. Connect multipart parts to exam presentation, answer capture, weighted partial-credit grading, and results review.
+4. Expand session preset editing to all stored criteria and add richer launch configuration/custom session types.
+5. Structured derivation authoring and step-by-step derivation execution.
+6. Official FSRS reference-vector validation, Room runtime migration tests, backup round-trip tests, and broader scheduler/exam tests.
+7. GitHub Actions verification, signed APK validation, and real-device offline/update acceptance.
+
+These are outstanding, not removed requirements. Version 3/4/5 remain unchanged.
+
+
+## 2.1.9 additions — requested image/media and table/graph milestones
+
+| Requirement | 2.1.9 source status | Notes |
+|---|---|---|
+| Select image from Android document picker | Implemented in source | Uses OpenDocument with `image/*`; bytes are copied immediately into the existing content-block Base64 field. Device picker behavior pending. |
+| Offline image rendering | Implemented in source | Decodes embedded bytes to bitmap in editor and study card; no remote URL or retained URI permission is needed. Per-image source limit 1.5 MB. Device verification pending. |
+| Image alt text and MIME type | Implemented in source | Stored in existing `altText` and `mediaMimeType` fields. |
+| Table content block | Implemented in source | Pipe-separated text editor and bounded preview; not a spreadsheet/grid editor. |
+| Numeric graph content block | Implemented in source | Comma/semicolon/tab-separated x,y data and simple connected Canvas plot; no multiple series/axis labels/annotations. |
+| Table/graph parser tests | Test source added | Five JUnit cases; not executed in Android Gradle test task. |
+| Backup of image bytes | Existing schema-8 path reused | Existing content-block JSON export/import already includes mediaBase64, mediaMimeType and altText. Backup round-trip not executed. |
+
+No Room migration or JSON schema bump was needed. The existing media columns and backup fields were already present in schema 8. These milestones are source-implemented only; Android compilation, CI and device verification remain pending.
+
+## Remaining V1/V2 work after 2.1.9
+
+Advanced multipart grading, full custom-session criteria editing, structured derivation authoring/execution, selection-aware rich formatting, broader analytics, official FSRS reference-vector validation, and full CI/device acceptance remain open. Do not remove these requirements.
+
+
+## 2.1.10 — multipart exam progress
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Multipart exam selection | Implemented in source | Timed exam includes questions with saved parts as well as standard MCQs. |
+| Multipart answer capture | Implemented in source | Parts with at least two saved options show selectable options; other parts use short-text entry. |
+| Weighted per-part scoring | Implemented in source | Each part earns its configured points or zero on normalized exact match. No numeric tolerance or within-part partial credit yet. |
+| Per-part results | Implemented in source | Shows response, expected answer, explanation, and earned/possible points. |
+| Total weighted exam result | Implemented in source | Sums earned and possible points across selected questions. |
+| JUnit regression tests | Added in source; not run by Android Gradle | Five cases; pure helper also exercised in a standalone Kotlin harness. |
+| Full custom-session criteria editing | Not implemented | Remains outstanding. |
+| Structured derivation authoring/execution | Not implemented | Remains outstanding. |
+| Full Android/CI/device verification | Pending | Do not mark complete without actual evidence. |
+
+### Grading limitations
+
+Text answers are graded using case-insensitive exact matching after trimming and collapsing whitespace. Each part is all-or-nothing for its configured points. Numeric tolerances, aliases, manual marking, within-part partial credit and negative marking remain outstanding.

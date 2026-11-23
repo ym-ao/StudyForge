@@ -1,98 +1,91 @@
-# Build status — StudyForge 2.1.2
+# Build status — StudyForge 2.1.11
 
-## Current source snapshot
+- **versionName:** `2.1.11`
+- **versionCode:** `16`
+- **Room database:** `9` (migrations 1→2→3→4→5→6→7→8→9)
+- **JSON backup:** schema `9`; imports schemas 1–9
+- **Debug artifact:** `StudyForge-2.1.11-debug-apk`
+- **Signed release artifact:** `StudyForge-2.1.11-release-apk` (only when the existing signing secrets are configured)
 
-- **versionName:** `2.1.2`
-- **versionCode:** `7`
-- **Room database version:** `3`
-- **JSON backup schema:** `3` (imports 1, 2, 3)
-- **Gradle:** `8.13`; Android Gradle Plugin `8.13.2`; Java `17`
-- **Debug artifact:** `StudyForge-2.1.2-debug-apk`
-- **Signed release artifact:** `StudyForge-2.1.2-release-apk`
-- **Signing alias:** fixed non-secret `studyforge-release`; keystore validated by `keytool` before Gradle release packaging.
-- **Required signing secrets:** `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD`.
+## Local verification performed
 
-## Verification status
+- Pure Kotlin harness passed for multipart numeric tolerances, accepted answer alternatives, derivation parsing/validation and saved-session criteria filtering.
+- SQLite 7→8 migration verifier: 7 checks passed.
+- SQLite 8→9 migration smoke test: existing rows survived; default values and updates for all six new columns passed.
+- Schema-9 backup example JSON and static field compatibility check passed.
+- Parser-only scan of Kotlin source reported no syntax diagnostics. This is not a Kotlin/Android compile.
+- Original `StudyForge_Plan.txt` preserved byte-for-byte.
 
-**APK/CI not verified.** This environment does not have a configured Android SDK or Gradle executable, so no Android Gradle build, Room runtime test, or JUnit suite could be run here. Local checks completed: standalone Kotlin scheduler smoke checks passed; the extracted SQLite 2→3 migration SQL preserved an existing question row and created the expected settings columns; the schema-3 example JSON parsed and contained FSRS/settings fields. A parser-only scan of the Kotlin sources reported no Kotlin syntax-parser diagnostics, but standalone compilation of the Android app cannot complete without Android/Compose/Room dependencies and an Android SDK. These checks do not replace Room/Gradle/CI or device testing. No successful GitHub Actions run or device test for 2.1.2 has been supplied.
+## Not verified
 
-The unit test source covers FSRS initial stability/difficulty, new-card and relearning delays, retention-sensitive intervals, max-interval clamping, step parsing, retrievability, the 90% stability point, and whole local study-day handling. The JUnit tests are not marked passed until GitHub Actions runs them successfully.
+- Full Gradle Android build, Compose/KSP/Room compilation and Android JUnit execution.
+- FSRS upstream golden-vector parity (only equation-level invariants have been added).
+- Room runtime migration and app-level JSON export/import round-trip.
+- GitHub Actions, signed APK generation, certificate continuity, installation/update or physical-device UI tests.
 
-## Required GitHub Actions verification
-
-1. `Run unit tests` passes.
-2. `Build debug APK` succeeds and uploads `StudyForge-2.1.2-debug-apk`.
-3. Signing preflight finds alias `studyforge-release` in the same existing keystore.
-4. `Build signed release APK` succeeds.
-5. `Upload signed release APK` uploads `StudyForge-2.1.2-release-apk`.
-6. Check the APK signing certificate remains identical to the previous release-key-signed app.
-7. Device acceptance: upgrade from actual installed app, Room 2→3 migration with populated data, settings persistence, FSRS due behaviour, no-network LaTeX display, and schema 1/2/3 backup restore.
-
-## Data safety / install cautions
-
-Room migration 2→3 adds FSRS columns and the settings table; there is no destructive fallback. The migration must be runtime-tested before broad installation. JSON schema 3 preserves legacy import. Export and verify a backup from the currently installed app before updating.
-
-If the installed app uses the exact same release signing certificate, install the 2.1.2 APK over it. If Android shows a signature conflict, first verify the JSON backup; then determine whether the installed app was signed with a different debug key. Only then use the one-time uninstall/reinstall transition and restore the backup. Do not uninstall as a routine update step.
-
-## 2.1.2 source-level change record
-
-- FSRS-6 scheduler with 21 default parameters; no FSRS reference-vector/CI verification yet.
-- Persistent settings and Room migration 2→3.
-- Expanded due queue, study modes, configurable MCQ exam, library filters and analytics.
-- Offline native LaTeX view integration and Markdown-like rich text preview.
-- JSON schema 3 exports FSRS memory state and settings; imports old schemas 1 and 2.
-- 2.1.1 signing alias fix and same key identity retained.
+**Do not treat this source ZIP as a tested APK.** Run the repository workflow and inspect its logs before installing.
 
 ---
 
-# Historical build status — earlier packages (retained)
+# Build status — StudyForge 2.1.10
 
-# Build and test status
+- **versionName:** `2.1.10`
+- **versionCode:** `15`
+- **Room database:** `8` (migrations 1→2→3→4→5→6→7→8; unchanged)
+- **JSON backup:** schema `8`; imports schemas 1–8 (unchanged)
+- **Debug artifact:** `StudyForge-2.1.10-debug-apk`
+- **Signed release artifact:** `StudyForge-2.1.10-release-apk`
 
-## Historical source snapshot — StudyForge 2.1.1 (retained)
+## Work performed
 
-- **versionName:** `2.1.1`
-- **versionCode:** `6`
-- **Room database version:** `2`
-- **JSON backup schema:** `2` (import accepts versions 1 and 2)
-- **Workflow:** `.github/workflows/android-apk.yml`
-- **Debug artifact:** `StudyForge-2.1.1-debug-apk`
-- **Signed release artifact:** `StudyForge-2.1.1-release-apk` (only when GitHub Actions signing secrets are configured)
+- Started from the exact uploaded `StudyForge-v2.1.8-self-contained-handoff.zip`; read its `HANDOFF_FOR_NEW_CHAT.md` and inspected source, Room model/DAO/migrations, content-block editor, study-card rendering, backup import/export, Gradle config, workflow and project records.
+- Confirmed the existing content-block entity already contains `mediaBase64`, `mediaMimeType` and `altText`; schema-8 backup export/import already serializes these fields. Reused them without adding a schema migration.
+- Added `OpenDocument` image picker for IMAGE blocks. The selected stream is copied immediately into Base64 content in the question record; image MIME type is checked and source bytes are limited to 1.5 MB. Added offline bitmap rendering in editor and study card.
+- Added TABLE block editing and preview using pipe-separated cells/newline-separated rows; preview is bounded to 30 rows and 8 columns.
+- Added GRAPH block editing and Canvas preview using numeric x,y pairs; parser accepts comma, semicolon or tab separators and preview is bounded to 200 points.
+- Added `ContentBlockParsing` pure helper and five JUnit test cases.
+- Bumped app version to 2.1.9 / versionCode 14 and updated GitHub Actions artifact labels. Room schema 8 and JSON backup schema 8 are unchanged.
+- Original `StudyForge_Plan.txt` was not edited.
 
-## Source-level checks completed
+## Verification performed
 
-- App version metadata is 2.1.1 / versionCode 6.
-- Existing Room database version 2 and migration 1-to-2 are unchanged.
-- Existing JSON backup schema version 2 and version 1/2 import compatibility are unchanged.
-- The Room `Migration` import remains `androidx.room.migration.Migration`.
-- Gradle release signing reads environment variables and does not contain literal passwords or a keystore path committed as a secret.
-- GitHub Actions still runs unit tests and a debug APK build, and conditionally assembles/uploads a release APK when `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, and `SIGNING_KEY_PASSWORD` are configured.
-- The workflow includes a cleanup step for the temporary decoded keystore.
-- `.gitignore` excludes keystore and signing credential files.
+- Compiled `ContentBlockParsing.kt` with the available Kotlin compiler and ran four standalone smoke checks: pipe-table parsing, comma/semicolon/tab graph parsing, non-finite-number rejection and 200-point bounding. All four passed.
+- Checked balanced delimiters in all four edited Kotlin source files.
+- Confirmed the existing JSON export serializes `mediaBase64`, `mediaMimeType` and `altText`, and import accepts embedded Base64 media (up to its existing 8 MB encoded cap).
+- Confirmed Room version remains 8, backup export schema remains 8, the 1→8 migration chain is unchanged, workflow artifact names match 2.1.9, and the original plan file hash matches the uploaded 2.1.8 ZIP.
+- No Gradle executable or Android SDK is available in this environment. The JUnit source is included but has not been executed.
 
-## Verification status
+## Not verified
 
-**Not yet verified.** This environment did not have a configured Android SDK or Gradle executable, so no Android Gradle tests or APK assembly were run here. No successful GitHub Actions run for the 2.1.1 source package has been supplied.
+- Full Kotlin/Compose/Room/KSP compilation.
+- Android JUnit test execution.
+- Actual Android document picker and image decoding on-device.
+- Table/graph Compose rendering on-device.
+- Room runtime migration, JSON backup export/import round-trip, GitHub Actions, signed release APK, signing-certificate continuity and physical-device installation/update.
 
-After adding the three repository secrets, run the workflow and confirm:
-
-1. `Run unit tests` succeeds.
-2. `Build debug APK` succeeds.
-3. `Prepare release signing key` succeeds.
-4. `Build signed release APK` succeeds.
-5. `Upload signed release APK` succeeds and produces `StudyForge-2.1.1-release-apk`.
-
-Then test the release APK on the Android phone. Verify future releases are signed by the same certificate. Device install/update is a separate acceptance step.
-
-## Critical install compatibility note
-
-The previously distributed workflow artifacts were debug APKs. The new 2.1.0 release APK uses a separate release key. Android generally refuses an in-place update if an installed package is signed by a different certificate. Before the first transition, export and verify a JSON backup. If installation reports a signature conflict, uninstall the old debug-signed app, install the 2.1.0 release APK, then restore the backup. After this first transition, keep and reuse this exact keystore for all future updates.
-
-## Known feature gaps still tracked
-
-This package is not the full Version 2 completion milestone. FSRS, configurable review limits/settings, configurable exam settings, rendered offline LaTeX, fuller filters/study modes, and additional regression coverage remain open in `ROADMAP.md`.
+**Do not describe the APK as built or the release as device-tested until actual CI/device evidence exists.**
 
 
-## Historical 2.1.1 signing failure investigation
+## 2.1.10 work and verification
 
-The supplied 2.1.0 GitHub Actions log failed in `:app:packageRelease` because the alias passed to Gradle was rendered as replacement characters and was not found in the keystore. The 2.1.1 workflow no longer reads the alias from a GitHub secret. It uses the documented fixed alias `studyforge-release` and validates it with `keytool` before Gradle packaging. This is a source-level mitigation; CI success remains unverified until the user runs the workflow.
+- Inspected the uploaded 2.1.9 ZIP and handoff. Confirmed existing Room `question_parts` table/DAO and schema-8 backup import/export.
+- Connected question parts to timed exam selection and passed the observed part list from the app shell to StudyScreen.
+- Added part-by-part answer UI, MCQ option rendering for parts with `optionsJson`, and short-text entry for other parts.
+- Added weighted scoring: each valid part contributes its configured positive points when its answer matches after trim/whitespace-collapse/case-fold; otherwise zero. Results show part-level earned/possible points and total weighted percentage.
+- Added `MultipartExamRules.kt` and five JUnit test cases.
+- No Room or JSON schema change; existing part records and backup representation are reused. Version 2.1.10 / versionCode 15; workflow artifact labels updated.
+
+### Verification performed
+
+- Compiled the pure `MultipartExamRules.kt` source with a lightweight Kotlin stub for the Room entity and ran five standalone assertions successfully.
+- Confirmed app version/versionCode, workflow artifact names, Room schema 8, JSON schema 8, and migration chain unchanged.
+- Confirmed original `StudyForge_Plan.txt` remains byte-for-byte unchanged relative to the uploaded 2.1.9 archive.
+- ZIP integrity and SHA256 manifest checked after packaging.
+
+### Not verified
+
+- Full Android Gradle/Compose/KSP compilation and Android JUnit task.
+- Timed exam UI behavior on Android, accessibility and configuration-change behavior.
+- GitHub Actions, release signing/certificate continuity, APK installation/update, Room runtime and JSON backup round-trip.
+
+Do not describe the APK as built or device-tested until actual CI/device evidence is available.

@@ -39,10 +39,14 @@ object ReviewScheduler {
             EASY -> 4
             else -> error("Unknown review rating: $rating")
         }
-        val isNew = question.learningState == "New" && question.fsrsStability <= 0.0 && question.intervalDays <= 0.0
+        val priorState = question.learningState
+        val isNew = priorState == "New" && question.fsrsStability <= 0.0 && question.intervalDays <= 0.0
+        val wasLearning = priorState == "Learning"
+        val wasRelearning = priorState == "Relearning"
+        val wasInReview = priorState == "Review"
         val oldStability = when {
             question.fsrsStability > 0.0 -> question.fsrsStability
-            question.intervalDays > 0.0 -> question.intervalDays.coerceAtLeast(0.1) // safely seed legacy SM-2 cards
+            question.intervalDays > 0.0 -> question.intervalDays.coerceAtLeast(0.1)
             else -> 0.0
         }
         val oldDifficulty = when {
@@ -69,14 +73,54 @@ object ReviewScheduler {
             }
         }
 
-        val nextIntervalDays = if (grade == 1) {
-            val steps = if (isNew) settings.learningStepsMinutesCsv else settings.relearningStepsMinutesCsv
-            parseSteps(steps).firstOrNull()?.div(1440.0) ?: (10.0 / 1440.0)
-        } else {
-            intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+        val learningSteps = parseSteps(settings.learningStepsMinutesCsv).ifEmpty { listOf(10) }
+        val relearningSteps = parseSteps(settings.relearningStepsMinutesCsv).ifEmpty { listOf(10) }
+        var nextState = "Review"
+        var nextStepIndex = -1
+        var nextIntervalDays: Double
+
+        when {
+            grade == 1 -> {
+                // A new card enters Learning; a graduated card enters Relearning.
+                // Repeated Again ratings restart the appropriate sequence at step zero.
+                val useRelearning = !isNew && !wasLearning && !wasRelearning
+                val steps = if (useRelearning || wasRelearning) relearningSteps else learningSteps
+                nextState = if (useRelearning || wasRelearning) "Relearning" else "Learning"
+                nextStepIndex = 0
+                nextIntervalDays = steps.first() / 1440.0
+            }
+            wasLearning || wasRelearning -> {
+                val steps = if (wasRelearning) relearningSteps else learningSteps
+                val currentIndex = question.learningStepIndex.coerceIn(0, steps.lastIndex)
+                when (grade) {
+                    2 -> {
+                        // Hard repeats the current step rather than silently skipping it.
+                        nextState = priorState
+                        nextStepIndex = currentIndex
+                        nextIntervalDays = steps[currentIndex] / 1440.0
+                    }
+                    3 -> {
+                        if (currentIndex + 1 < steps.size) {
+                            nextState = priorState
+                            nextStepIndex = currentIndex + 1
+                            nextIntervalDays = steps[nextStepIndex] / 1440.0
+                        } else {
+                            nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+                        }
+                    }
+                    else -> {
+                        // Easy graduates immediately from a learning/relearning sequence.
+                        nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+                    }
+                }
+            }
+            else -> {
+                // Good/Easy (and Hard on a new card) graduate directly to FSRS review.
+                nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+            }
         }
+
         val due = reviewedAt + (nextIntervalDays * DAY_MS).roundToLong().coerceAtLeast(1L)
-        val wasPreviouslySeen = question.reviewCount > 0 || question.learningState != "New"
         val easeCompatibility = (3.0 - ((difficulty - 1.0) / 9.0) * 1.7).coerceIn(1.3, 3.0)
 
         return question.copy(
@@ -86,8 +130,9 @@ object ReviewScheduler {
             intervalDays = nextIntervalDays,
             easeFactor = easeCompatibility,
             repetitions = if (grade == 1) 0 else question.repetitions + 1,
-            lapseCount = question.lapseCount + if (grade == 1 && wasPreviouslySeen) 1 else 0,
-            learningState = if (grade == 1) "Relearning" else "Review",
+            lapseCount = question.lapseCount + if (grade == 1 && wasInReview) 1 else 0,
+            learningState = nextState,
+            learningStepIndex = nextStepIndex,
             fsrsStability = stability,
             fsrsDifficulty = difficulty
         )
@@ -104,11 +149,10 @@ object ReviewScheduler {
         return ChronoUnit.DAYS.between(previousDay, currentDay).coerceAtLeast(0).toDouble()
     }
 
-    /** Reads configured retry delays in minutes; the current release uses the first valid value. */
+    /** Reads configured learning/relearning delays in minutes, preserving order and repeated steps. */
     fun parseSteps(csv: String): List<Int> = csv.split(',', ';', ' ')
         .mapNotNull { it.trim().toIntOrNull() }
         .filter { it in 1..1440 }
-        .distinct()
 
     fun intervalFor(stability: Double, retention: Double, maxIntervalDays: Int): Double {
         val safeRetention = retention.coerceIn(0.70, 0.99)
@@ -183,6 +227,7 @@ suspend fun StudyDatabase.recordGradedReview(
             repetitions = updated.repetitions,
             lapseCount = updated.lapseCount,
             learningState = updated.learningState,
+            learningStepIndex = updated.learningStepIndex,
             correctCount = current.correctCount + if (wasCorrect == true) 1 else 0,
             incorrectCount = current.incorrectCount + if (wasCorrect == false) 1 else 0,
             fsrsStability = updated.fsrsStability,

@@ -25,8 +25,8 @@ android {
         applicationId = "com.studyforge.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "2.1.2"
+        versionCode = 16
+        versionName = "2.1.11"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

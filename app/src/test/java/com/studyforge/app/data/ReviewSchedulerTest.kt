@@ -40,8 +40,75 @@ class ReviewSchedulerTest {
         val result = ReviewScheduler.apply(newQuestion(), ReviewScheduler.AGAIN, now, settings)
         assertEquals(2.0 / 1440.0, result.intervalDays, 0.000001)
         assertEquals(now + 2L * 60L * 1000L, result.dueAt)
-        assertEquals("Relearning", result.learningState)
+        assertEquals("Learning", result.learningState)
+        assertEquals(0, result.learningStepIndex)
         assertEquals(0, result.lapseCount)
+    }
+
+    @Test
+    fun learningStepsAdvanceAndGraduateInConfiguredOrder() {
+        val settings = StudySettingsEntity(learningStepsMinutesCsv = "2,10")
+        val start = 1_000_000L
+        val first = ReviewScheduler.apply(newQuestion(), ReviewScheduler.AGAIN, start, settings)
+        assertEquals("Learning", first.learningState)
+        assertEquals(0, first.learningStepIndex)
+        assertEquals(start + 2L * 60L * 1000L, first.dueAt)
+
+        val second = ReviewScheduler.apply(first, ReviewScheduler.GOOD, first.dueAt!!, settings)
+        assertEquals("Learning", second.learningState)
+        assertEquals(1, second.learningStepIndex)
+        assertEquals(second.lastReviewedAt!! + 10L * 60L * 1000L, second.dueAt)
+
+        val graduated = ReviewScheduler.apply(second, ReviewScheduler.GOOD, second.dueAt!!, settings)
+        assertEquals("Review", graduated.learningState)
+        assertEquals(-1, graduated.learningStepIndex)
+        assertTrue(graduated.intervalDays >= 1.0)
+    }
+
+    @Test
+    fun hardRepeatsCurrentLearningStepAndAgainRestartsIt() {
+        val settings = StudySettingsEntity(learningStepsMinutesCsv = "2,10")
+        val first = ReviewScheduler.apply(newQuestion(), ReviewScheduler.AGAIN, 1_000_000L, settings)
+        val hard = ReviewScheduler.apply(first, ReviewScheduler.HARD, first.dueAt!!, settings)
+        assertEquals(0, hard.learningStepIndex)
+        assertEquals("Learning", hard.learningState)
+        assertEquals(hard.lastReviewedAt!! + 2L * 60L * 1000L, hard.dueAt)
+
+        val advanced = ReviewScheduler.apply(hard, ReviewScheduler.GOOD, hard.dueAt!!, settings)
+        assertEquals(1, advanced.learningStepIndex)
+        val restarted = ReviewScheduler.apply(advanced, ReviewScheduler.AGAIN, advanced.dueAt!!, settings)
+        assertEquals(0, restarted.learningStepIndex)
+        assertEquals("Learning", restarted.learningState)
+        assertEquals(2.0 / 1440.0, restarted.intervalDays, 0.000001)
+    }
+
+    @Test
+    fun relearningStepsAdvanceAndGraduate() {
+        val settings = StudySettingsEntity(relearningStepsMinutesCsv = "5,20")
+        val reviewed = newQuestion("Review").copy(
+            fsrsStability = 12.0,
+            fsrsDifficulty = 5.0,
+            intervalDays = 12.0,
+            reviewCount = 4,
+            lastReviewedAt = 900_000L
+        )
+        val first = ReviewScheduler.apply(reviewed, ReviewScheduler.AGAIN, 1_000_000L, settings)
+        assertEquals("Relearning", first.learningState)
+        assertEquals(0, first.learningStepIndex)
+        assertEquals(first.lastReviewedAt!! + 5L * 60L * 1000L, first.dueAt)
+
+        val second = ReviewScheduler.apply(first, ReviewScheduler.GOOD, first.dueAt!!, settings)
+        assertEquals(1, second.learningStepIndex)
+        assertEquals(second.lastReviewedAt!! + 20L * 60L * 1000L, second.dueAt)
+
+        val graduated = ReviewScheduler.apply(second, ReviewScheduler.GOOD, second.dueAt!!, settings)
+        assertEquals("Review", graduated.learningState)
+        assertEquals(-1, graduated.learningStepIndex)
+    }
+
+    @Test
+    fun repeatedConfiguredIntervalsArePreserved() {
+        assertEquals(listOf(10, 10, 30), ReviewScheduler.parseSteps("10, 10, 30"))
     }
 
     @Test

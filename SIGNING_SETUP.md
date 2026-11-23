@@ -1,4 +1,4 @@
-# StudyForge — Release signing setup (2.1.2)
+# StudyForge — Release signing setup (2.1.6)
 
 This project creates a release-signed APK when the GitHub repository has the three Actions secrets below. The alias is a non-secret constant (`studyforge-release`) validated by the workflow before Gradle runs.
 
