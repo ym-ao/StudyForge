@@ -1,12 +1,12 @@
 # StudyForge — Master Project Plan
 
-**Current source version:** 2.1.12  
+**Current source version:** 2.1.13  
 **Android versionCode:** 17  
 **Plan status:** Living plan; original blueprint preserved in `StudyForge_Plan.txt`  
 **Platform:** Android (Kotlin + Jetpack Compose)  
 **Working style:** Develop in staged releases, with each ZIP containing the source and updated project records.
 
-> **Important status correction:** Earlier audit notes describe the 2.1.0 baseline and are retained as history. The current source package is 2.1.12 (versionCode 17, Room schema 9, JSON backup schema 9). The 2.1.11 source adds full saved-session criteria, stepwise DERIVATION blocks, multipart accepted-answer/numeric tolerance grading, broader recorded-data analytics, and FSRS-6 equation-invariant tests. Manual within-part partial credit, persisted whole-exam attempts, complete upstream FSRS vectors, Room runtime/backup round-trip, CI and device verification remain open. The original planning file said that no implementation had started; that statement described the planning baseline and is now historical. The 2.1.2–2.1.10 sources advance unfinished Version 1 and Version 2 features. The 2.1.4 source adds persisted multi-step learning/relearning progression; 2.1.5 adds reusable library-filter presets; 2.1.6 adds tag management. These source features are not yet verified as a successful APK build or device installation. See `IMPLEMENTATION_STATUS.md` and `BUILD_STATUS.md` for source status versus evidence.
+> **Important status correction:** Earlier audit notes describe the 2.1.0 baseline and are retained as history. The current source package is 2.1.13 (versionCode 18, Room schema 9, JSON backup schema 9). The 2.1.11 source adds full saved-session criteria, stepwise DERIVATION blocks, multipart accepted-answer/numeric tolerance grading, broader recorded-data analytics, and FSRS-6 equation-invariant tests. Manual within-part partial credit, persisted whole-exam attempts, complete upstream FSRS vectors, Room runtime/backup round-trip, CI and device verification remain open. The original planning file said that no implementation had started; that statement described the planning baseline and is now historical. The 2.1.2–2.1.10 sources advance unfinished Version 1 and Version 2 features. The 2.1.4 source adds persisted multi-step learning/relearning progression; 2.1.5 adds reusable library-filter presets; 2.1.6 adds tag management. These source features are not yet verified as a successful APK build or device installation. See `IMPLEMENTATION_STATUS.md` and `BUILD_STATUS.md` for source status versus evidence.
 
 ## Product vision
 

@@ -328,3 +328,16 @@ All notable StudyForge changes are recorded here. Newest release first.
 
 ### Verification boundary
 - The two reported compile errors were corrected by source inspection. Full Android compilation, JUnit, GitHub Actions, signed APK and device verification remain pending.
+
+
+## [2.1.13] — 2026-11-23
+
+### Fixed
+- Corrected `TagTextTest.renameAvoidsDuplicateNames` input fixture to include the unrelated `MDCAT` tag that the assertion expects to remain.
+- Kept production tag-renaming logic unchanged; the failing report showed the test expected a tag absent from its input.
+- Advanced app version to 2.1.13 / versionCode 18 and aligned CI artifact names.
+- Room schema 9 and JSON backup schema 9 remain unchanged.
+
+### Verification
+- Inspected uploaded GitHub Actions XML/HTML reports: 55 tests, 54 passed, 1 failed.
+- Corrected fixture source-inspected; full Gradle/JUnit rerun remains pending.

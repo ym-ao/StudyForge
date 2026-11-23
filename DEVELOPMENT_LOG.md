@@ -246,3 +246,13 @@ This log is append-only in spirit: new dated entries are added at the top; histo
 - Original `StudyForge_Plan.txt` was not edited. Existing signing workflow and alias remain unchanged.
 - Static assertions confirmed exactly one `FontWeight` import and that the error state declaration precedes the image picker callback.
 - Full Gradle/Android build and JUnit execution could not be run here; GitHub Actions and device verification remain pending.
+
+
+## 2026-11-23 — StudyForge 2.1.13 unit-test fixture correction
+
+- Inspected the user's `StudyForge-Unit-Test-Reports.zip` rather than guessing from the Gradle summary.
+- Report totals: 55 tests across 10 test classes; 54 passed and 1 failed.
+- Sole failure: `TagTextTest.renameAvoidsDuplicateNames`, line 16. Expected `Physics, MDCAT`, actual `Physics`; test input was `Physics, Chemistry`, so `MDCAT` was not present to preserve.
+- Corrected the test input to `Physics, Chemistry, MDCAT`. Kept production `TagText.rename` unchanged because its behavior was consistent with the supplied input.
+- Bumped app to 2.1.13 / versionCode 18; Room and JSON schemas remain 9. Updated workflow artifact names and release docs.
+- Full Gradle/JUnit rerun, CI, signed APK and device verification remain pending.

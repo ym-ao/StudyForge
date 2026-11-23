@@ -1,10 +1,10 @@
-# StudyForge 2.1.12
+# StudyForge 2.1.13
 
-StudyForge is an offline-first Android question library and learning app. Version 2.1.12 is a build-fix release based on CI compiler errors; it preserves the Version 2.1.11 feature set: full saved-session criteria, stepwise structured derivations, numeric-tolerance and accepted-alternative multipart grading, richer activity/exam analytics, and FSRS-6 mathematical invariant tests.
+StudyForge is an offline-first Android question library and learning app. Version 2.1.13 is a build-fix release based on CI compiler errors; it preserves the Version 2.1.11 feature set: full saved-session criteria, stepwise structured derivations, numeric-tolerance and accepted-alternative multipart grading, richer activity/exam analytics, and FSRS-6 mathematical invariant tests.
 
 **Verification boundary:** Source ZIP only. Local pure-Kotlin harnesses and SQLite/JSON smoke scripts passed as recorded below. Full Android Gradle/KSP/JUnit, Room runtime, GitHub Actions, signed APK, and physical-device testing have not been completed.
 
-## 2.1.12 build-fix release
+## 2.1.13 build-fix release
 
 - Removed duplicate `FontWeight` import in `StudyContent.kt`.
 - Moved the question-editor `error` state declaration before the image-picker callback that updates it.

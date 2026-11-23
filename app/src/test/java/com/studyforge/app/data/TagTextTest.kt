@@ -13,7 +13,7 @@ class TagTextTest {
     }
 
     @Test fun renameAvoidsDuplicateNames() {
-        assertEquals("Physics, MDCAT", TagText.rename("Physics, Chemistry", "Chemistry", "physics"))
+        assertEquals("Physics, MDCAT", TagText.rename("Physics, Chemistry, MDCAT", "Chemistry", "physics"))
     }
 
     @Test fun removeOnlyRemovesExactTag() {
