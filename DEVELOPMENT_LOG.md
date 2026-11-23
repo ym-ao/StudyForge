@@ -234,3 +234,15 @@ This log is append-only in spirit: new dated entries are added at the top; histo
 - FSRS upstream golden vectors remain pending.
 - Manual examiner marking and within-part partial credit remain pending.
 - Exam analytics currently aggregate per-question review logs rather than persisted whole-exam attempts.
+
+
+## 2026-11-23 — StudyForge 2.1.12 CI compile-error fixes
+
+- Started from the uploaded `StudyForge-v2.1.11-self-contained-handoff.zip` and followed its `HANDOFF_FOR_NEW_CHAT.md`.
+- Reproduced the exact source locations from the user's GitHub Actions log.
+- `StudyContent.kt`: removed the second duplicate `androidx.compose.ui.text.font.FontWeight` import.
+- `StudyForgeApp.kt`: moved `var error by remember { mutableStateOf<String?>(null) }` above the image-picker callback, so `.onFailure` assigns to the declared state.
+- Advanced app version to 2.1.12 / versionCode 17 and updated workflow artifact names. Room schema 9 and JSON backup schema 9 remain unchanged.
+- Original `StudyForge_Plan.txt` was not edited. Existing signing workflow and alias remain unchanged.
+- Static assertions confirmed exactly one `FontWeight` import and that the error state declaration precedes the image picker callback.
+- Full Gradle/Android build and JUnit execution could not be run here; GitHub Actions and device verification remain pending.

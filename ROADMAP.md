@@ -4,12 +4,19 @@ This is the live implementation roadmap. The five major versions below are the a
 
 ## Current release snapshot
 
-- **Current source version:** 2.1.11
-- **versionCode:** 16
+- **Current source version:** 2.1.12
+- **versionCode:** 17
 - **Room database version:** 9
 - **JSON backup schema:** 9 (import accepts versions 1–9)
 - **Build status:** Not verified for this source ZIP; CI must pass after the signing secrets are configured.
 - **Device status:** No confirmed install/update test recorded for this source ZIP.
+
+## 2.1.12 build-fix note
+
+- Removed the duplicate Compose `FontWeight` import in `StudyContent.kt`.
+- Moved the question-editor error state before the image-picker callback in `StudyForgeApp.kt`.
+- App version 2.1.12 / versionCode 17; Room and JSON schema remain 9.
+- Source-only correction; CI and device verification remain pending.
 
 ## 2.1.10 progress note (historical)
 

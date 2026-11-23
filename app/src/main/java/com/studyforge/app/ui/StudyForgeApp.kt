@@ -706,6 +706,7 @@ private fun QuestionEditor(
     var selectedCollections by remember(initial?.id) { mutableStateOf(initialCollectionIds.toSet()) }
     val contentBlocks = remember(initial?.id) { mutableStateListOf<QuestionContentBlockEntity>().apply { addAll(initialContentBlocks) } }
     val context = LocalContext.current
+    var error by remember { mutableStateOf<String?>(null) }
     var imageTargetIndex by remember { mutableIntStateOf(-1) }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val target = imageTargetIndex
@@ -730,7 +731,6 @@ private fun QuestionEditor(
     var blockKindExpanded by remember(initial?.id) { mutableStateOf(false) }
     var typeExpanded by remember { mutableStateOf(false) }
     var difficultyExpanded by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
     Scaffold(
         topBar = {
             TopAppBar(

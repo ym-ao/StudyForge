@@ -313,3 +313,18 @@ All notable StudyForge changes are recorded here. Newest release first.
 - Multipart grading remains all-or-nothing per part; manual marking and within-part partial credit are not implemented.
 - FSRS tests are invariant checks, not the full upstream reference-vector suite.
 - No full Android build, GitHub Actions, signed APK, backup round-trip or device test has been verified.
+
+
+## [2.1.12] — 2026-11-23
+
+### Fixed
+- Removed the duplicate `FontWeight` import that caused an ambiguous-import Kotlin compiler error in `StudyContent.kt`.
+- Moved the question-editor `error` state declaration above the image-picker callback that assigns to it, fixing the unresolved/invalid assignment at the callback.
+
+### Changed
+- App version advanced to 2.1.12 / versionCode 17.
+- GitHub Actions artifact names updated to 2.1.12.
+- Room schema remains 9; JSON backup schema remains 9. No database or backup format change.
+
+### Verification boundary
+- The two reported compile errors were corrected by source inspection. Full Android compilation, JUnit, GitHub Actions, signed APK and device verification remain pending.

@@ -1,9 +1,9 @@
-# Current source audit — StudyForge 2.1.11
+# Current source audit — StudyForge 2.1.12
 
-**App:** 2.1.11 / versionCode 16  
+**App:** 2.1.12 / versionCode 17  
 **Room:** schema 9; additive migrations 1→2→3→4→5→6→7→8→9  
 **JSON backup:** schema 9; import accepts 1–9  
-**Audit basis:** uploaded 2.1.10 source ZIP inspected, then source changes audited.
+**Audit basis:** uploaded 2.1.11 source ZIP inspected; 2.1.12 applies only the two CI-reported Kotlin compile fixes.
 
 | V1/V2 area | 2.1.11 source status | Boundary
 |---|---|---|
@@ -14,6 +14,12 @@
 | FSRS validation | Partial tests added | Published mathematical invariants tested; full upstream golden vectors still pending.
 | Room/backup validation | Partial | SQLite migration smoke scripts and schema-9 JSON static check passed; Room runtime and app-level round-trip pending.
 | CI/device acceptance | Not verified | No GitHub Actions run, signed APK or device test available.
+
+## 2.1.12 compile-fix evidence
+
+- Duplicate `FontWeight` import removed; exactly one import remains.
+- Editor error state declaration now precedes the image-picker callback assignment.
+- Full Android compilation and JUnit remain pending.
 
 ## 2.1.11 verification evidence
 

@@ -115,6 +115,12 @@
 - `app/src/main/java/com/studyforge/app/ui/StudyForgeApp.kt` — passes persisted question parts into StudyScreen.
 
 
+## 2.1.12 build fixes
+
+- Removed duplicate Compose `FontWeight` import.
+- Declared editor error state before image-picker callback use.
+- No data schema changes.
+
 ## 2.1.11 additions
 
 - `app/src/main/java/com/studyforge/app/data/DerivationRules.kt`: DERIVATION block parser and validation.
