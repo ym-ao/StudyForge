@@ -3,6 +3,7 @@ package com.studyforge.app.data
 import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -42,7 +43,10 @@ data class QuestionEntity(
     val lapseCount: Int = 0,
     val learningState: String = "New",
     val correctCount: Int = 0,
-    val incorrectCount: Int = 0
+    val incorrectCount: Int = 0,
+    // FSRS memory state. Zero means this card has not yet been converted/reviewed with FSRS.
+    @ColumnInfo(defaultValue = "0.0") val fsrsStability: Double = 0.0,
+    @ColumnInfo(defaultValue = "0.0") val fsrsDifficulty: Double = 0.0
 )
 
 @Entity(tableName = "collections")
@@ -80,6 +84,25 @@ data class ReviewLogEntity(
     val scheduledDueAt: Long? = null
 )
 
+@Entity(tableName = "study_settings")
+data class StudySettingsEntity(
+    @PrimaryKey val id: String = "default",
+    val desiredRetention: Double = 0.90,
+    val maxIntervalDays: Int = 36500,
+    val newCardsPerDay: Int = 20,
+    val reviewCardsPerDay: Int = 200,
+    val reviewOrder: String = "Due first",
+    val learningStepsMinutesCsv: String = "10",
+    val relearningStepsMinutesCsv: String = "10",
+    val examQuestionCount: Int = 20,
+    val examDurationMinutes: Int = 30,
+    val examRandomize: Boolean = true
+) {
+    companion object {
+        val DEFAULT = StudySettingsEntity()
+    }
+}
+
 @Dao
 interface StudyDao {
     @Query("SELECT * FROM questions ORDER BY updatedAt DESC")
@@ -100,7 +123,7 @@ interface StudyDao {
     @Query("DELETE FROM questions WHERE id = :id")
     suspend fun deleteQuestion(id: String)
 
-    @Query("UPDATE questions SET reviewCount = :reviewCount, lastReviewedAt = :reviewedAt, dueAt = :dueAt, intervalDays = :intervalDays, easeFactor = :easeFactor, repetitions = :repetitions, lapseCount = :lapseCount, learningState = :learningState, correctCount = :correctCount, incorrectCount = :incorrectCount WHERE id = :id")
+    @Query("UPDATE questions SET reviewCount = :reviewCount, lastReviewedAt = :reviewedAt, dueAt = :dueAt, intervalDays = :intervalDays, easeFactor = :easeFactor, repetitions = :repetitions, lapseCount = :lapseCount, learningState = :learningState, correctCount = :correctCount, incorrectCount = :incorrectCount, fsrsStability = :fsrsStability, fsrsDifficulty = :fsrsDifficulty WHERE id = :id")
     suspend fun updateReviewSchedule(
         id: String,
         reviewCount: Int,
@@ -112,7 +135,9 @@ interface StudyDao {
         lapseCount: Int,
         learningState: String,
         correctCount: Int,
-        incorrectCount: Int
+        incorrectCount: Int,
+        fsrsStability: Double,
+        fsrsDifficulty: Double
     )
 
     @Query("SELECT * FROM questions")
@@ -135,6 +160,9 @@ interface StudyDao {
 
     @Query("SELECT * FROM question_collection")
     suspend fun getAllLinks(): List<QuestionCollectionCrossRef>
+
+    @Query("SELECT * FROM question_collection")
+    fun observeLinks(): Flow<List<QuestionCollectionCrossRef>>
 
     @Query("SELECT collectionId FROM question_collection WHERE questionId = :questionId")
     suspend fun getCollectionIds(questionId: String): List<String>
@@ -159,11 +187,20 @@ interface StudyDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReviewLogs(logs: List<ReviewLogEntity>)
+
+    @Query("SELECT * FROM study_settings WHERE id = 'default' LIMIT 1")
+    fun observeSettings(): Flow<StudySettingsEntity?>
+
+    @Query("SELECT * FROM study_settings WHERE id = 'default' LIMIT 1")
+    suspend fun getSettings(): StudySettingsEntity?
+
+    @Upsert
+    suspend fun upsertSettings(settings: StudySettingsEntity)
 }
 
 @Database(
-    entities = [QuestionEntity::class, CollectionEntity::class, QuestionCollectionCrossRef::class, ReviewLogEntity::class],
-    version = 2,
+    entities = [QuestionEntity::class, CollectionEntity::class, QuestionCollectionCrossRef::class, ReviewLogEntity::class, StudySettingsEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class StudyDatabase : RoomDatabase() {
@@ -186,13 +223,21 @@ abstract class StudyDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE questions ADD COLUMN fsrsStability REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE questions ADD COLUMN fsrsDifficulty REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("CREATE TABLE IF NOT EXISTS study_settings (id TEXT NOT NULL, desiredRetention REAL NOT NULL, maxIntervalDays INTEGER NOT NULL, newCardsPerDay INTEGER NOT NULL, reviewCardsPerDay INTEGER NOT NULL, reviewOrder TEXT NOT NULL, learningStepsMinutesCsv TEXT NOT NULL, relearningStepsMinutesCsv TEXT NOT NULL, examQuestionCount INTEGER NOT NULL, examDurationMinutes INTEGER NOT NULL, examRandomize INTEGER NOT NULL, PRIMARY KEY(id))")
+            }
+        }
+
         @Volatile private var INSTANCE: StudyDatabase? = null
         fun get(context: Context): StudyDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(
                 context.applicationContext,
                 StudyDatabase::class.java,
                 "studyforge.db"
-            ).addMigrations(MIGRATION_1_2).build().also { INSTANCE = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { INSTANCE = it }
         }
     }
 }

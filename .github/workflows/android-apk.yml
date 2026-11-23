@@ -39,41 +39,50 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
         with:
-          name: StudyForge-2.1.0-debug-apk
+          name: StudyForge-2.1.2-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
 
-      - name: Prepare release signing key
+      - name: Prepare and validate release signing key
         id: signing
         env:
           KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          KEY_ALIAS: studyforge-release
         shell: bash
         run: |
           if [[ -z "$KEYSTORE_BASE64" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Release signing secrets are not configured; signed release APK will be skipped."
-          else
-            for value in "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD"; do
-              if [[ -z "$value" ]]; then
-                echo "A signing secret is missing. Configure all four secrets in SIGNING_SETUP.md." >&2
-                exit 1
-              fi
-            done
-            echo "$KEYSTORE_BASE64" | base64 --decode > app/release-key.jks
-            test -s app/release-key.jks
-            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release signing keystore is not configured; signed release APK will be skipped."
+            exit 0
           fi
+
+          if [[ -z "$STORE_PASSWORD" || -z "$KEY_PASSWORD" ]]; then
+            echo "::error::A signing password secret is missing. Configure SIGNING_STORE_PASSWORD and SIGNING_KEY_PASSWORD."
+            exit 1
+          fi
+
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > app/release-key.jks
+          test -s app/release-key.jks
+
+          if ! keytool -list -keystore app/release-key.jks -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::The keystore could not be opened with the configured store password, or it does not contain the expected alias 'studyforge-release'. Check the keystore and SIGNING_STORE_PASSWORD. The expected alias is fixed in the workflow; no alias secret is needed."
+            echo "Aliases found in the keystore (if it can be opened):"
+            keytool -list -keystore app/release-key.jks -storepass "$STORE_PASSWORD" 2>/dev/null | grep -E '^[[:space:]]*[^,]+,' || true
+            exit 1
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+          echo "Release keystore and expected alias validated."
 
       - name: Build signed release APK
         if: steps.signing.outputs.configured == 'true'
         env:
           SIGNING_STORE_FILE: app/release-key.jks
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_ALIAS: studyforge-release
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
 
@@ -81,7 +90,7 @@ jobs:
         if: steps.signing.outputs.configured == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: StudyForge-2.1.0-release-apk
+          name: StudyForge-2.1.2-release-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30

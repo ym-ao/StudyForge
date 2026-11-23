@@ -1,46 +1,57 @@
 # Continue StudyForge in a new ChatGPT conversation
 
-Upload the latest complete StudyForge source ZIP to the new conversation, then paste the prompt below. This ZIP is intended to be self-contained: it includes source code, the original detailed plan, the current master plan, logs, build workflow, implementation audit, and this handoff guide.
+Upload the latest complete StudyForge source ZIP to the new conversation, then paste the prompt below. This ZIP is the source of truth for the included code, current logs, original project plan, and release handoff.
 
 ## Copy-paste prompt
 
 ```text
-I'm continuing development of my Android application, StudyForge. The uploaded ZIP is the current source-of-truth package.
+I'm continuing development of my Android application, StudyForge. The uploaded ZIP is the latest complete source package.
 
-First, carefully inspect the entire ZIP before changing anything.
+First, inspect the entire ZIP before changing anything.
 
-1. Read PROJECT_PLAN.md, StudyForge_Plan.txt, IMPLEMENTATION_STATUS.md, CHANGELOG.md, ROADMAP.md, DEVELOPMENT_LOG.md, BUILD_STATUS.md, README.md, and this handoff file.
-2. Inspect the actual Kotlin source, database entities/DAO/migrations, Gradle configuration, unit tests, JSON backup/import code, Android manifest, and GitHub Actions workflow. Do not rely on the documentation alone.
-3. Confirm the current app version, versionCode, Room database version, JSON backup schema, completed source features, known limitations, and latest verified build/test status.
-4. Compare source code against the approved five-major-version plan. Distinguish clearly between planned, implemented in source, tested, CI-build-verified, and tested on the Android device.
-5. Do not silently remove, simplify, or change the approved product requirements. If the source and documentation disagree, report the discrepancy and preserve data compatibility while resolving it.
-6. Continue with the next planned release. The current package is StudyForge 2.1.0 (versionCode 5). The implementation audit says Version 1 and Version 2 are not fully complete: LaTeX is source-only, the scheduler is SM-2-inspired rather than FSRS, review/exam settings are limited, and the full filters/rich editor requirements remain incomplete. The 2.1.0 package adds secure optional release signing and a conditional release APK workflow; those learning-engine requirements remain open and must not be removed. Continue them before marking the milestone complete or moving to 3.0.
-7. Before editing code, inspect database migrations, existing question IDs, collection links, review history, and JSON import/export compatibility. Never use destructive database fallbacks or silently discard user data. Add migrations and tests when schema changes are necessary.
-8. Add or update tests for new features and regression risks. Never claim tests passed or APK built unless the command/CI result actually confirms it.
-9. Keep the Android phone + Termux + GitHub Actions workflow practical. I do not rely on a PC for the normal build process. Keep the ZIP GitHub-ready.
-10. For every release, update versionName/versionCode and workflow artifact naming consistently. Append to CHANGELOG.md; update ROADMAP.md, DEVELOPMENT_LOG.md, BUILD_STATUS.md, IMPLEMENTATION_STATUS.md, README.md, and this handoff information where relevant. Keep historical logs; do not erase old entries.
-11. Deliver a complete new source ZIP containing all source code, GitHub Actions workflow, original plan, current master plan, implementation matrix, release logs, build status, signing setup guide, and new-chat prompt. Include clear Termux instructions for applying it to an existing Git repository and explain backup/install precautions.
-12. Preserve the exact release signing key. Never regenerate it for a routine update and never include it or its credentials in the source ZIP. The user stores it separately and configures GitHub Actions secrets as documented in `SIGNING_SETUP.md`.
-13. If the installed app is still signed with an earlier debug key, explain the one-time backup/uninstall/reinstall transition needed before installing the release-key-signed APK. For all later updates, use the same keystore and alias.
+1. Read PROJECT_PLAN.md, StudyForge_Plan.txt, IMPLEMENTATION_STATUS.md, CHANGELOG.md, ROADMAP.md, DEVELOPMENT_LOG.md, BUILD_STATUS.md, README.md, PROJECT_FILE_GUIDE.md, SIGNING_SETUP.md, THIRD_PARTY_NOTICES.md, and this handoff file.
+2. Inspect the actual Kotlin source, Gradle configuration, Room entities/DAO/migrations, unit tests, backup import/export, manifest, and GitHub Actions workflow. Do not trust documentation in place of source inspection.
+3. Confirm app version/versionCode, Room version, JSON backup version, migration chain, current feature status, and actual CI/device evidence.
+4. The current source is StudyForge 2.1.2 (versionCode 7), Room schema 3, JSON backup schema 3. It adds source implementations for FSRS-6, persisted review/exam settings, expanded library filters, more study modes, configurable MCQ exams, native LaTeX rendering, and Markdown-like rich-content preview. None of these should be called CI-verified or device-verified unless the real logs prove it.
+5. Do not silently remove, simplify, replace, or forget any approved requirement in the original five-major-version plan. The original detailed blueprint `StudyForge_Plan.txt` is authoritative. Incomplete items stay as outstanding requirements. Changes to scope require my explicit approval.
+6. Version 1/2 are still not fully complete. The rich editor still lacks the full structured block/media/table/graph model; filters still lack all difficulty/exam/performance presets; scheduler multi-step progression and advanced settings need work; step-by-step derivations/custom sessions and advanced exam navigation/types remain incomplete. See the current implementation matrix and roadmap.
+7. Before data-model changes, inspect Room migrations, stable question IDs, collection links, review history and backup schema. Never use destructive fallback migrations or silently discard data. Add migrations/tests for required changes.
+8. Add tests for new algorithm and database features. For FSRS, compare behavior to upstream reference vectors as well as app-specific cases. Never say tests passed or APK built without actual successful evidence.
+9. Keep the Android phone + Termux + GitHub Actions build workflow practical. This project must remain manageable without a desktop computer.
+10. Preserve the exact private signing key. The workflow's documented alias is the non-secret constant `studyforge-release`. Required GitHub Actions secrets are SIGNING_KEYSTORE_BASE64, SIGNING_STORE_PASSWORD, and SIGNING_KEY_PASSWORD. Do not regenerate, print, commit, or include the private key or credentials in the ZIP.
+11. For every meaningful development session and every release, update relevant logs. Every release must append to CHANGELOG.md and update ROADMAP.md, DEVELOPMENT_LOG.md, BUILD_STATUS.md, IMPLEMENTATION_STATUS.md, README.md, PROJECT_FILE_GUIDE.md and this handoff where needed. Keep historical records; do not erase old entries.
+12. Keep versionName/versionCode and workflow artifact naming consistent. Increment versionCode on each new APK release.
+13. Deliver a complete self-contained source ZIP with source, workflow, original plan, current plan, current implementation audit, logs, build status, signing setup, notices, backup example, and new-chat handoff.
+14. Clearly separate source implementation, locally tested, CI-tested, signed APK verified, and tested on my Android device. Do not claim build success until I provide or you obtain actual GitHub Actions evidence.
 
-Start by summarizing your audit of the uploaded project and the next release scope. Then proceed with development and produce the complete updated ZIP. Clearly identify anything that cannot be verified in your environment and what I must check in GitHub Actions or on my phone.
+Start with a source-vs-plan audit and identify any mismatch before continuing the next planned V1/V2 release. Preserve the existing key identity and all user data. If the next step is clear, proceed with the best safe implementation and package the full updated ZIP; do not ask me to repeat information already in the files.
 ```
 
-## Rules for using the package
+## Current 2.1.2 source snapshot
 
-- Always upload the newest complete source ZIP, not only a log file.
-- Keep `StudyForge_Plan.txt` as the preserved original detailed blueprint.
-- Treat `PROJECT_PLAN.md` as the current release-level plan, and `IMPLEMENTATION_STATUS.md` as the source-vs-plan audit.
-- Treat the latest successful GitHub Actions run as the evidence for cloud build/test status. A source edit is not proof of a successful build.
-- Before installing an update, export a backup from the currently installed app. Install the new APK over the existing app; do not uninstall first as a routine update method.
-- Never put GitHub tokens, signing passwords, or AI provider API keys in the ZIP or public repository.
+- App: 2.1.2 / versionCode 7.
+- Room: schema version 3; migrations 1→2 and 2→3. Version 2→3 adds FSRS stability/difficulty columns and the `study_settings` table.
+- Backup: schema version 3; imports schemas 1, 2, and 3. Schema 3 includes FSRS memory state and settings. Older backup imports are supported; matching existing FSRS values are retained for schema 1/2 imports.
+- Scheduler: source implementation of FSRS-6 with the published default 21 parameters and whole local study-day elapsed intervals (calendar-day difference in the device time zone). A standalone Kotlin smoke test passed, but it has not yet been validated with upstream reference vectors or in CI.
+- Settings: desired retention, maximum interval, daily new/review limits, review order, retry delays, exam question count/duration/randomization.
+- Study modes: Due, All, Practice, Random, Ordered, Topic, Weakest, basic Step-by-step, Exam.
+- Library: type/status/subject/chapter/topic/tag/collection filters; search includes answer/explanation.
+- LaTeX: native RaTeX view integrated for the equation field; offline/device rendering not verified.
+- Rich content: Markdown-like preview only. Full structured editor with media/tables/graphs remains outstanding.
+- CI and device verification: not yet recorded for 2.1.2. Run the workflow and inspect the actual logs.
+- Signing: keep the existing `.jks` private and use the same alias/key for all updates. Three GitHub secrets are documented in `SIGNING_SETUP.md`.
 
+## Next unfinished approved work
 
-## Current 2.1.0 signing state
+Continue V1/V2 gaps before starting Version 3: complete rich blocks/media, advanced filters and tag management, multi-step scheduler flow and full custom settings, structured derivations/custom sessions, richer exams, database/backup/FSRS reference tests, and full CI/device acceptance. The V3/V4/V5 roadmap remains unchanged.
 
-- App source is 2.1.0 / versionCode 5.
-- Room database remains version 2; JSON backup schema remains version 2. No DB migration was introduced in this update.
-- Release signing is configured through environment variables only. GitHub Actions needs four repository secrets: `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD`.
-- `SIGNING_SETUP.md` describes the separate private key materials and the initial debug-to-release transition. The key and passwords are not part of this ZIP.
-- No 2.1.0 CI build or device update is yet verified. Check the latest Actions run; do not claim build success without it.
-- The planned FSRS/settings/LaTeX/filter requirements remain outstanding and are not deleted from the approved plan.
+## Package rules
+
+- `StudyForge_Plan.txt` is the preserved original blueprint and must not be edited to reduce scope.
+- `PROJECT_PLAN.md` is the current master plan.
+- `IMPLEMENTATION_STATUS.md` records source-vs-plan and verification status.
+- `CHANGELOG.md` is append-only.
+- `BUILD_STATUS.md` records only actual build/test evidence.
+- Export and verify a backup before installing an APK.
+- Never uninstall the app as a routine update step; if there is a signature mismatch, investigate whether the installed version is debug-signed before performing the one-time transition.
+- Never include passwords, signing key material, GitHub tokens, or AI secrets in the ZIP.

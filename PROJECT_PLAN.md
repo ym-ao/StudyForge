@@ -1,12 +1,12 @@
 # StudyForge — Master Project Plan
 
-**Current source version:** 2.1.0  
-**Android versionCode:** 5  
+**Current source version:** 2.1.2  
+**Android versionCode:** 7  
 **Plan status:** Living plan; original blueprint preserved in `StudyForge_Plan.txt`  
 **Platform:** Android (Kotlin + Jetpack Compose)  
 **Working style:** Develop in staged releases, with each ZIP containing the source and updated project records.
 
-> **Important status correction:** This project has source code for versions 1.0.0 through 2.1.0. The original planning file said that no implementation had started; that statement described the planning baseline and is now historical. The 2.1.0 package adds release signing infrastructure but is not yet verified as a successful APK build, and some items promised by the major-version plan are still incomplete. See `IMPLEMENTATION_STATUS.md` and `BUILD_STATUS.md` before deciding what to implement next.
+> **Important status correction:** Earlier audit notes describe the 2.1.0 baseline and are retained as history. The current source package is 2.1.2. The original planning file said that no implementation had started; that statement described the planning baseline and is now historical. The 2.1.2 source advances unfinished Version 1 and Version 2 features. It is not yet verified as a successful APK build or device installation. See `IMPLEMENTATION_STATUS.md` and `BUILD_STATUS.md` for source status versus evidence.
 
 ## Product vision
 
@@ -42,7 +42,7 @@ First useful offline-first release:
 - Basic review history.
 - GitHub Actions APK building.
 
-The first useful APK should be genuinely usable for study, not an empty prototype. The architecture should prepare for later releases without prematurely introducing AI/cloud dependencies. The current source has much of the local foundation, but rendered LaTeX and a fully structured rich editor are not yet implemented.
+The first useful APK should be genuinely usable for study, not an empty prototype. The architecture should prepare for later releases without prematurely introducing AI/cloud dependencies. The 2.1.2 source adds a native offline LaTeX renderer and Markdown-like content previews. The full structured block editor (including media, tables, and graphs) remains incomplete.
 
 ### Version 2.0 — Learning engine
 
@@ -53,7 +53,7 @@ The first useful APK should be genuinely usable for study, not an empty prototyp
 - Weak-topic analytics.
 - Custom review settings.
 
-The current 2.0.0/2.0.1 implementation is a learning-engine foundation, but its scheduler is SM-2-inspired rather than FSRS. It also has a limited fixed-format exam and basic analytics. Version 2 should remain open until the planned FSRS and configurable learning features are delivered and tested.
+The 2.1.2 source adds an FSRS-6 scheduler, persisted review/exam settings, additional study modes, configurable MCQ exams, and expanded analytics. Version 2 remains open until these features pass CI/regression and real-device acceptance checks, and remaining planned modes/analytics are complete.
 
 ### Version 3.0 — Advanced question engine
 
@@ -100,18 +100,19 @@ Use semantic versioning within the major release, for example:
 - `1.2.0` — further improvements.
 - `2.0.0` — major learning-engine milestone.
 
-The current source version is `2.1.0` with `versionCode = 5`. This 2.1.0 package adds conditional release-signing support and a signed APK workflow. It is not yet the full 2.1.0 learning-engine completion milestone; the planned FSRS, settings, LaTeX rendering, richer filters, and additional tests remain open. The version is a source candidate until CI and device checks pass. Do not reuse a version code. Increment it for every APK release. Do not mark Version 2 or the 2.1.0 completion scope as finished while important Version 1 and Version 2 requirements remain incomplete. The current 2.1.0 source is a signing-enabled development/release candidate; continue with the outstanding approved items before calling the milestone complete.
+The current source version is `2.1.2` with `versionCode = 7`. Version 2.1.2 is a feature release that advances outstanding Version 1 and Version 2 requirements. It retains the 2.1.1 fixed signing alias workflow and adds FSRS-6 scheduling, configurable settings, more study modes, configurable exams, expanded filters, Markdown-like previews, offline LaTeX rendering, and backup schema 3. The release remains a source candidate until CI, migration, and device checks pass. Do not reuse a version code. Increment it for every APK release. Do not mark Version 1 or Version 2 finished while important approved requirements remain incomplete.
 
 ## Next recommended work
 
-Before starting Version 3.0, prioritize the gaps listed in `IMPLEMENTATION_STATUS.md`. The current 2.1.0 package establishes a stable release-signing path. The rest of the already-approved 2.1.0 completion scope remains required and outstanding:
+The 2.1.2 source advances several previously missing V1/V2 features, but it does not complete the entire approved scope. Before starting Version 3.0, continue with the remaining V1/V2 requirements:
 
-1. Implement and validate the planned FSRS scheduler (or explicitly document a user-approved change to the plan before replacing it).
-2. Add configurable new/review limits, review order, and exam question-count/duration settings.
-3. Improve the study modes and topic/collection filters.
-4. Implement real LaTeX rendering in prompts, answers, and explanations while retaining editable source.
-5. Expand migration, backup/restore, scheduler, and exam tests.
-6. Verify the full GitHub Actions test + APK build and then test installation/update on the Android device.
+1. Expand the rich editor into the full structured content-block model, including media, tables, and graphs.
+2. Complete filters for difficulty, exam labels, performance, and saved/custom filter presets.
+3. Implement true multi-step learning/relearning progression, review recovery, and all custom scheduler settings as specified.
+4. Expand step-by-step work into structured derivation steps; implement any remaining custom/numerical/topic learning session variants.
+5. Complete exam navigation, more question types, and richer results where specified.
+6. Add database migration, JSON round-trip, FSRS reference-vector, scheduling edge-case, and exam-flow tests.
+7. Verify GitHub Actions build, signed APK signature, installation/update, offline LaTeX, DB migration, and backup restore on the Android device.
 
 Avoid scope creep: keep dynamic numerical templates for Version 3, AI/API workflows for Version 4, and cloud/multi-user expansion for Version 5 unless the user explicitly changes the roadmap.
 
@@ -123,9 +124,9 @@ Avoid scope creep: keep dynamic numerical templates for Version 3, AI/API workfl
 - Minimum SDK 26; compile SDK 36; target SDK 35.
 - Java 17 target.
 - Android Gradle Plugin 8.13.2; Gradle 8.13 in GitHub Actions.
-- Current Room database schema version 2; migration `1 -> 2` is in `StudyDatabase.kt`.
-- Backup JSON schema version 2; import accepts schema versions 1 and 2.
-- Current scheduler code is `ReviewScheduler.kt` and is SM-2-inspired, not FSRS.
+- Current Room database schema version 3; migrations `1 -> 2 -> 3` are in `StudyDatabase.kt`.
+- Backup JSON schema version 3; import accepts schema versions 1, 2, and 3.
+- Current scheduler code is `ReviewScheduler.kt` and implements FSRS-6 with the published default parameter set; CI/reference-vector validation remains pending.
 - GitHub Actions workflow: `.github/workflows/android-apk.yml`.
 
 These values must be checked against the source before changing them. Database and backup schema changes require deliberate migration/backward-compatibility work.
@@ -155,3 +156,13 @@ For each release:
 - `DEVELOPMENT_LOG.md` records dated technical progress and decisions.
 - `BUILD_STATUS.md` records actual build/test evidence and known failures.
 - `HANDOFF_FOR_NEW_CHAT.md` contains the prompt to continue in a fresh chat.
+
+
+## 2.1.1 patch scope
+
+The 2.1.1 patch hardens the release-signing workflow: the non-secret alias is fixed to `studyforge-release` and checked with `keytool` before Gradle packages the APK. The original five-major-version product requirements are unchanged.
+
+
+## 2.1.2 feature scope
+
+Version 2.1.2 advances unfinished Version 1 and Version 2 features. The exact source-level scope and its limitations are recorded in `IMPLEMENTATION_STATUS.md`. This release does not remove any original requirement, and it does not move Version 3/4/5 features into the current milestone.

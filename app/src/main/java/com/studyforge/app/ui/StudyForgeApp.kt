@@ -6,7 +6,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -79,6 +82,7 @@ import com.studyforge.app.data.CollectionEntity
 import com.studyforge.app.data.QuestionCollectionCrossRef
 import com.studyforge.app.data.QuestionEntity
 import com.studyforge.app.data.ReviewLogEntity
+import com.studyforge.app.data.StudySettingsEntity
 import com.studyforge.app.data.recordGradedReview
 import com.studyforge.app.data.StudyDatabase
 import kotlinx.coroutines.launch
@@ -96,6 +100,12 @@ fun StudyForgeApp(database: StudyDatabase) {
     val questions by dao.observeQuestions().collectAsState(initial = emptyList())
     val collections by dao.observeCollections().collectAsState(initial = emptyList())
     val reviewLogs by dao.observeReviewLogs().collectAsState(initial = emptyList())
+    val links by dao.observeLinks().collectAsState(initial = emptyList())
+    val storedSettings by dao.observeSettings().collectAsState(initial = null)
+    val studySettings = storedSettings ?: StudySettingsEntity.DEFAULT
+    LaunchedEffect(Unit) {
+        if (dao.getSettings() == null) dao.upsertSettings(StudySettingsEntity.DEFAULT)
+    }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -134,7 +144,8 @@ fun StudyForgeApp(database: StudyDatabase) {
         NavItem("Collections", Icons.Default.Folder),
         NavItem("Study", Icons.Default.School),
         NavItem("Backup", Icons.Default.ImportExport),
-        NavItem("Progress", Icons.Default.Insights)
+        NavItem("Progress", Icons.Default.Insights),
+        NavItem("Settings", Icons.Default.Settings)
     )
 
     Scaffold(
@@ -182,6 +193,8 @@ fun StudyForgeApp(database: StudyDatabase) {
                 )
                 1 -> LibraryScreen(
                     questions = questions,
+                    collections = collections,
+                    links = links,
                     onEdit = { question -> scope.launch { editorCollectionIds = dao.getCollectionIds(question.id); editorId = question.id; editorOpen = true } },
                     onDelete = { question -> scope.launch { dao.deleteQuestion(question.id); snackbar.showSnackbar("Question deleted") } }
                 )
@@ -197,8 +210,10 @@ fun StudyForgeApp(database: StudyDatabase) {
                 )
                 3 -> StudyScreen(
                     questions = questions,
+                    reviewLogs = reviewLogs,
+                    settings = studySettings,
                     onReview = { question, rating, wasCorrect, mistakeCategory, reviewMode ->
-                        scope.launch { database.recordGradedReview(question.id, rating, wasCorrect, mistakeCategory.orEmpty(), reviewMode) }
+                        scope.launch { database.recordGradedReview(question.id, rating, wasCorrect, mistakeCategory.orEmpty(), reviewMode, settings = studySettings) }
                     }
                 )
                 4 -> BackupScreen(
@@ -213,6 +228,9 @@ fun StudyForgeApp(database: StudyDatabase) {
                     } }
                 )
                 5 -> ProgressScreen(questions = questions, reviewLogs = reviewLogs)
+                6 -> SettingsScreen(settings = studySettings, onSave = { updated ->
+                    scope.launch { dao.upsertSettings(updated); snackbar.showSnackbar("Study settings saved") }
+                })
             }
         }
     }
@@ -247,7 +265,7 @@ private fun HomeScreen(
         ActionCard("Start studying", "Review flashcards and answer MCQs.", Icons.Default.School, onStudy)
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Version 2.1.0 • Signed release pipeline", fontWeight = FontWeight.SemiBold)
+                Text("Version 2.1.2 • FSRS learning engine", fontWeight = FontWeight.SemiBold)
                 Text("StudyForge now schedules reviews, tracks mistakes, and summarizes weak topics. Your library stays on this device. Export a JSON backup regularly so you can move your work to another device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -281,23 +299,67 @@ private fun ActionCard(title: String, description: String, icon: androidx.compos
 @Composable
 private fun LibraryScreen(
     questions: List<QuestionEntity>,
+    collections: List<CollectionEntity>,
+    links: List<QuestionCollectionCrossRef>,
     onEdit: (QuestionEntity) -> Unit,
     onDelete: (QuestionEntity) -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf("All") }
+    var typeFilter by rememberSaveable { mutableStateOf("All") }
+    var statusFilter by rememberSaveable { mutableStateOf("All") }
+    var subjectFilter by rememberSaveable { mutableStateOf("") }
+    var chapterFilter by rememberSaveable { mutableStateOf("") }
+    var topicFilter by rememberSaveable { mutableStateOf("") }
+    var tagFilter by rememberSaveable { mutableStateOf("") }
+    var selectedCollectionId by rememberSaveable { mutableStateOf("") }
+    var collectionMenu by remember { mutableStateOf(false) }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+
+    val collectionId = selectedCollectionId.takeIf { it.isNotBlank() }
+    val selectedCollectionLabel = collections.firstOrNull { it.id == collectionId }?.name ?: "All collections"
+    val collectionQuestionIds = remember(links, collectionId) {
+        if (collectionId == null) emptySet() else links.filter { it.collectionId == collectionId }.map { it.questionId }.toSet()
+    }
     val filtered = questions.filter { q ->
-        val matchesText = search.isBlank() || listOf(q.prompt, q.subject, q.chapter, q.topic, q.tagsCsv).any { it.contains(search, true) }
-        val matchesType = filter == "All" || q.type == filter
-        matchesText && matchesType
+        val matchesText = search.isBlank() || listOf(q.prompt, q.answer, q.explanation, q.subject, q.chapter, q.topic, q.tagsCsv).any { it.contains(search, true) }
+        val matchesType = typeFilter == "All" || q.type.equals(typeFilter, true)
+        val matchesStatus = statusFilter == "All" || q.status.equals(statusFilter, true)
+        val matchesSubject = subjectFilter.isBlank() || q.subject.contains(subjectFilter, true)
+        val matchesChapter = chapterFilter.isBlank() || q.chapter.contains(chapterFilter, true)
+        val matchesTopic = topicFilter.isBlank() || q.topic.contains(topicFilter, true)
+        val matchesTag = tagFilter.isBlank() || q.tagsCsv.split(',').any { it.trim().contains(tagFilter, true) }
+        val matchesCollection = collectionId == null || q.id in collectionQuestionIds
+        matchesText && matchesType && matchesStatus && matchesSubject && matchesChapter && matchesTopic && matchesTag && matchesCollection
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Search questions") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 10.dp)) {
-            listOf("All", "Flashcard", "MCQ").forEach { type ->
-                FilterChip(selected = filter == type, onClick = { filter = type }, label = { Text(type) })
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+            listOf("All", "Flashcard", "MCQ").forEach { type -> FilterChip(selected = typeFilter == type, onClick = { typeFilter = type }, label = { Text(type) }) }
+            FilterChip(selected = showFilters, onClick = { showFilters = !showFilters }, label = { Text(if (showFilters) "Hide filters" else "More filters") })
+        }
+        if (showFilters) {
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Collection", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                    Box {
+                        OutlinedButton(onClick = { collectionMenu = true }) { Text(selectedCollectionLabel) }
+                        DropdownMenu(expanded = collectionMenu, onDismissRequest = { collectionMenu = false }) {
+                            DropdownMenuItem(text = { Text("All collections") }, onClick = { selectedCollectionId = ""; collectionMenu = false })
+                            collections.forEach { c -> DropdownMenuItem(text = { Text(c.name) }, onClick = { selectedCollectionId = c.id; collectionMenu = false }) }
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("All", "Draft", "Verified").forEach { status -> FilterChip(selected = statusFilter == status, onClick = { statusFilter = status }, label = { Text(status) }) }
+                }
+                OutlinedTextField(subjectFilter, { subjectFilter = it }, label = { Text("Subject filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(chapterFilter, { chapterFilter = it }, label = { Text("Chapter filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(topicFilter, { topicFilter = it }, label = { Text("Topic filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(tagFilter, { tagFilter = it }, label = { Text("Tag filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                TextButton(onClick = { subjectFilter = ""; chapterFilter = ""; topicFilter = ""; tagFilter = ""; statusFilter = "All"; selectedCollectionId = ""; typeFilter = "All"; search = "" }) { Text("Clear all filters") }
             }
         }
+        Text("${filtered.size} of ${questions.size} questions", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (filtered.isEmpty()) {
             EmptyState("No questions found", if (questions.isEmpty()) "Tap + to create your first question." else "Try a different search or filter.")
         } else {
@@ -308,13 +370,15 @@ private fun LibraryScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(q.type, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                                 Spacer(Modifier.weight(1f))
+                                Text(q.status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 IconButton(onClick = { onEdit(q) }, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Edit, "Edit") }
                                 IconButton(onClick = { onDelete(q) }, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Delete, "Delete") }
                             }
-                            Text(q.prompt, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 3)
+                            RichContentText(q.prompt, style = MaterialTheme.typography.titleMedium)
                             val meta = listOf(q.subject, q.chapter, q.topic).filter { it.isNotBlank() }.joinToString(" • ")
                             if (meta.isNotBlank()) Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (q.latex.isNotBlank()) Text("Equation source: ${q.latex}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, maxLines = 2)
+                            if (q.tagsCsv.isNotBlank()) Text("Tags: ${q.tagsCsv}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                            if (q.latex.isNotBlank()) LatexFormulaView(q.latex, Modifier.fillMaxWidth())
                         }
                     }
                 }
@@ -416,7 +480,8 @@ private fun QuestionEditor(
                             dueAt = initial?.dueAt, intervalDays = initial?.intervalDays ?: 0.0,
                             easeFactor = initial?.easeFactor ?: 2.5, repetitions = initial?.repetitions ?: 0,
                             lapseCount = initial?.lapseCount ?: 0, learningState = initial?.learningState ?: "New",
-                            correctCount = initial?.correctCount ?: 0, incorrectCount = initial?.incorrectCount ?: 0
+                            correctCount = initial?.correctCount ?: 0, incorrectCount = initial?.incorrectCount ?: 0,
+                            fsrsStability = initial?.fsrsStability ?: 0.0, fsrsDifficulty = initial?.fsrsDifficulty ?: 0.0
                         )
                         onSave(entity, selectedCollections.toList())
                     }
@@ -426,7 +491,14 @@ private fun QuestionEditor(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
-            OutlinedTextField(prompt, { prompt = it; error = null }, label = { Text("Question / Front") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            Text("Formatting shortcuts • tap to insert a starter", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                listOf("Bold" to "**bold text**", "Italic" to "*italic text*", "Heading" to "## Heading", "Bullet" to "- list item", "Code" to "`code`").forEach { (label, token) ->
+                    FilterChip(selected = false, onClick = { prompt = if (prompt.isBlank()) token else "$prompt\n$token" }, label = { Text(label) })
+                }
+            }
+            OutlinedTextField(prompt, { prompt = it; error = null }, label = { Text("Question / Front (supports basic Markdown)") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            if (prompt.isNotBlank()) Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(10.dp)) { Text("Question preview", style = MaterialTheme.typography.labelSmall); RichContentText(prompt) } }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Question type", fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.width(12.dp))
@@ -437,7 +509,9 @@ private fun QuestionEditor(
             }
             if (type == "MCQ") OutlinedTextField(options, { options = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Options (one per line)") }, minLines = 4, supportingText = { Text("The answer field below must match the correct option exactly.") })
             OutlinedTextField(answer, { answer = it; error = null }, label = { Text(if (type == "MCQ") "Correct option (exact text)" else "Answer / Back") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+            if (answer.isNotBlank() && type != "MCQ") Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(10.dp)) { Text("Answer preview", style = MaterialTheme.typography.labelSmall); RichContentText(answer) } }
             OutlinedTextField(explanation, { explanation = it }, label = { Text("Explanation (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            if (explanation.isNotBlank()) Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(10.dp)) { Text("Explanation preview", style = MaterialTheme.typography.labelSmall); RichContentText(explanation) } }
             HorizontalDivider()
             Text("Organization", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             OutlinedTextField(subject, { subject = it }, label = { Text("Subject") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -445,13 +519,12 @@ private fun QuestionEditor(
             OutlinedTextField(topic, { topic = it }, label = { Text("Topic / Subtopic") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(tags, { tags = it }, label = { Text("Tags (comma-separated)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             HorizontalDivider()
-            Text("Equation (LaTeX source)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Equation (LaTeX)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             OutlinedTextField(latex, { latex = it }, label = { Text("Example: v = \\frac{\\Delta x}{\\Delta t}") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             if (latex.isNotBlank()) Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(Modifier.padding(12.dp)) {
-                    Text("LaTeX source preview", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    Text(latex, style = MaterialTheme.typography.bodyLarge)
-                    Text("The source is saved exactly. Rendered equation preview is planned for a later 1.x update.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Rendered offline LaTeX preview", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    LatexFormulaView(latex, Modifier.fillMaxWidth())
                 }
             }
             HorizontalDivider()
@@ -480,7 +553,7 @@ private fun BackupScreen(onExport: (Uri) -> Unit, onImport: (Uri) -> Unit) {
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), onResult = { it?.let(onImport) })
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Backup & restore", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text("Move your library between devices or keep a safe copy. Version 2 backups include questions, collections, review history, scheduling, and mistake tracking. Version 1 backups are still supported.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Move your library between devices or keep a safe copy. Version 3 backups include questions, collections, review history, FSRS memory state, and study settings. Version 1 and 2 backups remain importable.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.ImportExport, null, tint = MaterialTheme.colorScheme.primary)
@@ -522,7 +595,8 @@ private suspend fun exportBackup(context: Context, database: StudyDatabase, uri:
     val collections = dao.getAllCollections()
     val links = dao.getAllLinks()
     val reviewLogs = dao.getAllReviewLogs()
-    val root = JSONObject().put("app", "StudyForge").put("schemaVersion", 2).put("exportedAt", System.currentTimeMillis())
+    val settings = dao.getSettings() ?: StudySettingsEntity.DEFAULT
+    val root = JSONObject().put("app", "StudyForge").put("schemaVersion", 3).put("exportedAt", System.currentTimeMillis())
     root.put("questions", JSONArray().apply {
         questions.forEach { q -> put(JSONObject()
             .put("id", q.id).put("prompt", q.prompt).put("answer", q.answer).put("explanation", q.explanation)
@@ -532,7 +606,8 @@ private suspend fun exportBackup(context: Context, database: StudyDatabase, uri:
             .put("lastReviewedAt", q.lastReviewedAt ?: JSONObject.NULL)
             .put("dueAt", q.dueAt ?: JSONObject.NULL).put("intervalDays", q.intervalDays).put("easeFactor", q.easeFactor)
             .put("repetitions", q.repetitions).put("lapseCount", q.lapseCount).put("learningState", q.learningState)
-            .put("correctCount", q.correctCount).put("incorrectCount", q.incorrectCount)) }
+            .put("correctCount", q.correctCount).put("incorrectCount", q.incorrectCount)
+            .put("fsrsStability", q.fsrsStability).put("fsrsDifficulty", q.fsrsDifficulty)) }
     })
     root.put("collections", JSONArray().apply {
         collections.forEach { c -> put(JSONObject().put("id", c.id).put("name", c.name).put("description", c.description).put("createdAt", c.createdAt)) }
@@ -545,6 +620,12 @@ private suspend fun exportBackup(context: Context, database: StudyDatabase, uri:
             .put("mistakeCategory", log.mistakeCategory).put("reviewMode", log.reviewMode)
             .put("scheduledDueAt", log.scheduledDueAt ?: JSONObject.NULL)) }
     })
+    root.put("settings", JSONObject()
+        .put("desiredRetention", settings.desiredRetention).put("maxIntervalDays", settings.maxIntervalDays)
+        .put("newCardsPerDay", settings.newCardsPerDay).put("reviewCardsPerDay", settings.reviewCardsPerDay)
+        .put("reviewOrder", settings.reviewOrder).put("learningStepsMinutesCsv", settings.learningStepsMinutesCsv)
+        .put("relearningStepsMinutesCsv", settings.relearningStepsMinutesCsv).put("examQuestionCount", settings.examQuestionCount)
+        .put("examDurationMinutes", settings.examDurationMinutes).put("examRandomize", settings.examRandomize))
     context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(root.toString(2)) }
         ?: error("Could not open the selected file for writing")
 }
@@ -555,7 +636,7 @@ private suspend fun importBackup(context: Context, database: StudyDatabase, uri:
     val root = JSONObject(raw)
     require(root.optString("app") == "StudyForge") { "This file is not a StudyForge backup" }
     val schemaVersion = root.optInt("schemaVersion", -1)
-    require(schemaVersion in 1..2) { "Unsupported backup version" }
+    require(schemaVersion in 1..3) { "Unsupported backup version" }
     val questions = mutableListOf<QuestionEntity>()
     val qArray = root.optJSONArray("questions") ?: JSONArray()
     for (i in 0 until qArray.length()) {
@@ -571,7 +652,8 @@ private suspend fun importBackup(context: Context, database: StudyDatabase, uri:
             intervalDays = o.optDouble("intervalDays", 0.0), easeFactor = o.optDouble("easeFactor", 2.5),
             repetitions = o.optInt("repetitions", 0), lapseCount = o.optInt("lapseCount", 0),
             learningState = o.optString("learningState", "New"), correctCount = o.optInt("correctCount", 0),
-            incorrectCount = o.optInt("incorrectCount", 0)
+            incorrectCount = o.optInt("incorrectCount", 0),
+            fsrsStability = o.optDouble("fsrsStability", 0.0), fsrsDifficulty = o.optDouble("fsrsDifficulty", 0.0)
         )
     }
     val collections = mutableListOf<CollectionEntity>()
@@ -598,11 +680,33 @@ private suspend fun importBackup(context: Context, database: StudyDatabase, uri:
             scheduledDueAt = if (o.isNull("scheduledDueAt")) null else o.optLong("scheduledDueAt")
         )
     }
+    val settingsObject = root.optJSONObject("settings")
+    val importedSettings = settingsObject?.let { o -> StudySettingsEntity(
+        desiredRetention = o.optDouble("desiredRetention", 0.90).coerceIn(0.80, 0.97),
+        maxIntervalDays = o.optInt("maxIntervalDays", 36500).coerceIn(1, 36500),
+        newCardsPerDay = o.optInt("newCardsPerDay", 20).coerceIn(0, 500),
+        reviewCardsPerDay = o.optInt("reviewCardsPerDay", 200).coerceIn(0, 2000),
+        reviewOrder = o.optString("reviewOrder", "Due first"),
+        learningStepsMinutesCsv = o.optString("learningStepsMinutesCsv", "10"),
+        relearningStepsMinutesCsv = o.optString("relearningStepsMinutesCsv", "10"),
+        examQuestionCount = o.optInt("examQuestionCount", 20).coerceIn(1, 200),
+        examDurationMinutes = o.optInt("examDurationMinutes", 30).coerceIn(1, 240),
+        examRandomize = o.optBoolean("examRandomize", true)
+    ) }
     database.withTransaction {
         val dao = database.dao()
-        dao.upsertQuestions(questions)
+        val existingById = dao.getAllQuestions().associateBy { it.id }
+        val safeQuestions = if (schemaVersion < 3) questions.map { imported ->
+            val existing = existingById[imported.id]
+            if (existing != null) imported.copy(
+                fsrsStability = existing.fsrsStability,
+                fsrsDifficulty = existing.fsrsDifficulty
+            ) else imported
+        } else questions
+        dao.upsertQuestions(safeQuestions)
         dao.upsertCollections(collections)
         dao.insertLinks(links)
         if (reviewLogs.isNotEmpty()) dao.insertReviewLogs(reviewLogs)
+        if (importedSettings != null) dao.upsertSettings(importedSettings)
     }
 }

@@ -1,6 +1,6 @@
 {
   "app": "StudyForge",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "exportedAt": 1795392000000,
   "questions": [
     {
@@ -27,10 +27,24 @@
       "lapseCount": 0,
       "learningState": "New",
       "correctCount": 0,
-      "incorrectCount": 0
+      "incorrectCount": 0,
+      "fsrsStability": 0.0,
+      "fsrsDifficulty": 0.0
     }
   ],
   "collections": [],
   "links": [],
-  "reviewLogs": []
+  "reviewLogs": [],
+  "settings": {
+    "desiredRetention": 0.9,
+    "maxIntervalDays": 36500,
+    "newCardsPerDay": 20,
+    "reviewCardsPerDay": 200,
+    "reviewOrder": "Due first",
+    "learningStepsMinutesCsv": "10",
+    "relearningStepsMinutesCsv": "10",
+    "examQuestionCount": 20,
+    "examDurationMinutes": 30,
+    "examRandomize": true
+  }
 }

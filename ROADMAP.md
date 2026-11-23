@@ -4,10 +4,10 @@ This is the live implementation roadmap. The five major versions below are the a
 
 ## Current release snapshot
 
-- **Current source version:** 2.1.0
-- **versionCode:** 5
-- **Room database version:** 2
-- **JSON backup schema:** 2 (import accepts versions 1 and 2)
+- **Current source version:** 2.1.2
+- **versionCode:** 7
+- **Room database version:** 3
+- **JSON backup schema:** 3 (import accepts versions 1, 2, and 3)
 - **Build status:** Not verified for this source ZIP; CI must pass after the signing secrets are configured.
 - **Device status:** No confirmed install/update test recorded for this source ZIP.
 
@@ -24,25 +24,25 @@ This is the live implementation roadmap. The five major versions below are the a
 - [x] JSON backup/import with schema versioning.
 - [x] GitHub Actions workflow source.
 - [x] Optional release-signing configuration and conditional signed APK workflow (requires GitHub repository secrets).
-- [ ] Full structured rich-content editor (content blocks, formatting, images/tables/graphs as scoped).
-- [ ] Proper rendered LaTeX in prompts, answers, hints, and explanations.
-- [ ] Full subject/chapter/topic/tag/collection/status filters.
+- [~] Markdown-like rich text preview supports headings, lists, bold, italic, and inline code; full structured content blocks/media/tables/graphs remain open.
+- [~] Native offline LaTeX rendering is integrated for the existing equation field; richer formula placement in all content blocks and device verification remain open.
+- [~] Type, status, subject, chapter, topic, tag, and collection filters implemented; difficulty/exam/performance and saved filters remain open.
 - [ ] Successful CI build and installation/update acceptance test for a release candidate.
 
 ### Version 2.0 — Learning engine
 
 **Foundation exists; milestone is not fully complete.**
 
-- [ ] Replace/upgrade the current SM-2-inspired algorithm with the planned FSRS scheduler, after evaluating a compatible implementation and adding tests.
-- [x] Again / Hard / Good / Easy ratings and due-date scheduling (current scheduler is SM-2-inspired, not FSRS).
+- [~] FSRS-6 scheduler and default parameters implemented in source; CI tests and official reference-vector validation remain pending.
+- [x] Again / Hard / Good / Easy ratings and due-date scheduling (scheduler implementation upgraded to FSRS-6 in 2.1.2).
 - [x] Due, All, and Practice modes.
-- [x] Timed MCQ exam mode (currently fixed at 10 questions maximum and 15 minutes).
+- [~] Timed MCQ exam mode; count, duration, and randomization are configurable in 2.1.2, but it remains MCQ-only.
 - [x] Mistake categories and review logs.
 - [x] Basic progress/weak-topic reporting.
-- [ ] Configurable new/review limits and review settings.
-- [ ] Configurable exam count/duration and more complete exam navigation/settings.
-- [ ] More study modes (step-by-step, topic/weak-area/numerical/custom sessions and selectable order).
-- [ ] Stronger topic/subject/chapter/skill analytics.
+- [~] Persistent desired-retention, max interval, new/review daily limits, review order, and retry-delay settings implemented in source; test and device verification pending.
+- [~] Configurable exam count/duration/randomization, mark-for-review, and submit confirmation implemented; MCQ-only, navigation-grid and richer exam support remain open.
+- [~] Random, ordered, topic-focused, weakest-first, and basic answer-then-explanation step-by-step modes implemented; structured derivations, numerical and custom session builders remain open.
+- [~] Topic, subject and mistake-category analytics expanded from real review logs; chapter/skill analysis remains open.
 - [ ] Expanded migration, scheduler, backup round-trip, and exam tests.
 
 ### Version 3.0 — Advanced question engine
@@ -79,9 +79,9 @@ This is the live implementation roadmap. The five major versions below are the a
 - [ ] Advanced analytics.
 - [ ] Question/collection sharing and multi-user expansion if desired.
 
-## Current 2.1.0 release state and remaining scope
+## Historical 2.1.0 release state and remaining scope
 
-The 2.1.0 source package adds secure optional release signing, CI support for a signed release artifact, and signing/installation documentation. The remaining approved Version 1/2 work is still required and remains in scope; it is not complete in this source ZIP:
+The 2.1.0 source package added secure optional release signing, CI support for a signed release artifact, and signing/installation documentation. At that time the following V1/V2 work remained; 2.1.2 has since implemented some of it, with the current status shown above and in `IMPLEMENTATION_STATUS.md`:
 
 1. FSRS implementation and scheduler tests.
 2. User-configurable review limits, review order, and exam settings.
@@ -101,3 +101,28 @@ Avoid introducing Version 3/4/5 features early unless the user changes the appro
 5. Add tests for new logic and regression cases.
 6. Mark builds verified only after the actual GitHub Actions results pass.
 7. Keep complete source and all project records in each handoff ZIP.
+
+
+## 2.1.1 patch
+
+- [x] Remove the alias GitHub secret dependency; use the documented non-secret alias `studyforge-release`.
+- [x] Validate the alias against the decoded keystore with `keytool` before Gradle release packaging.
+- [ ] Verify the 2.1.1 workflow in GitHub Actions.
+- [ ] Verify installation/update behavior on the Android device.
+
+
+## StudyForge 2.1.2 — V1/V2 feature release
+
+- [x] Version metadata: 2.1.2 / versionCode 7; release artifacts renamed consistently.
+- [x] Keep fixed non-secret signing alias `studyforge-release` and preflight validation from 2.1.1.
+- [x] FSRS-6 scheduler source with 21 default parameters, stability/difficulty, retrievability, target-retention interval calculation.
+- [x] Room version 2→3 migration adding FSRS memory columns and persisted study settings without destructive table replacement.
+- [x] Persistent desired-retention, maximum interval, new/review daily caps, review order, retry delay, and exam settings.
+- [x] Due, All, Practice, Random, Ordered, Topic, Weakest, and basic Step-by-step modes.
+- [x] Configurable timed MCQ exam length/duration/randomization, mark-for-review, submit confirmation, and result review.
+- [x] Expanded library filters: type, status, subject, chapter, topic, tag, collection; search includes answer/explanation.
+- [x] Native LaTeX view integration and Markdown-like rich content preview.
+- [x] JSON backup schema 3 includes FSRS values and settings; imports schema 1/2/3 and preserves existing FSRS values when importing an older backup.
+- [x] Added FSRS unit tests; tests have not been run in this environment.
+- [ ] Validate Gradle build, Room migration, all unit tests, signed APK and offline rendering in GitHub Actions/device.
+- [ ] Complete remaining rich editor, advanced filters, multi-step scheduling, structured derivations, expanded exam analytics/navigation, and more regression/instrumented tests.

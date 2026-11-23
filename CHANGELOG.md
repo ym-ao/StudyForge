@@ -1,5 +1,54 @@
 # Changelog
 
+## [2.1.2] - 2026-11-23
+
+### Added — Version 1 core improvements
+- Added native Canvas-based offline LaTeX rendering for the existing equation field and Markdown-like rich-content previews for headings, lists, bold, italic, and inline code.
+- Expanded library filters for question type, status, subject, chapter, topic, tag, and collection; search now includes answer and explanation text.
+
+### Added — Version 2 learning engine
+- Replaced the previous SM-2-inspired scheduler with an FSRS-6 source implementation using the published 21-parameter default set, memory stability/difficulty, whole local study-day elapsed intervals, retrievability, and retention-target intervals.
+- Added a Room-backed study settings screen for desired retention, maximum interval, daily new/review caps, review order, retry delay, exam length/duration, and randomization.
+- Added Random, Ordered, Topic-focused, Weakest-first, and basic Step-by-step study modes; retained Due, All, and Practice.
+- Expanded timed MCQ exams with configurable count/duration, optional randomization, mark-for-review, submit confirmation, and result review.
+- Expanded progress analysis with actual recorded weak-subject counts.
+
+### Data and compatibility
+- Increased Room schema to version 3 with a non-destructive 2→3 migration for FSRS memory values and persistent study settings.
+- Increased JSON backup schema to 3; exports FSRS state and settings and continues importing schemas 1 and 2.
+- Added accurate third-party notices distinguishing RaTeX MIT-licensed renderer code from KaTeX fonts licensed under SIL Open Font License 1.1.
+- Preserved question IDs, review logs, collections, historical release records, and the original five-version plan.
+- Kept the 2.1.1 fixed signing alias and preflight validation; the existing private signing key is unchanged and excluded from this source ZIP.
+
+### Tests and verification
+- Replaced SM-2-oriented scheduler tests with FSRS-focused unit test source.
+- Android Gradle build, CI, migration runtime, official FSRS reference-vector validation, signed APK verification, and device installation are not yet verified. See `BUILD_STATUS.md`.
+
+### Remaining scope
+- Rich editor media/blocks/tables/graphs, advanced filters, full multi-step scheduler progression, structured derivation blocks, advanced exam navigation, and expanded instrumented tests remain incomplete. These are not removed from the approved plan.
+
+
+
+## [2.1.1] - 2026-11-23
+
+### Fixed
+- Removed the non-secret signing alias from GitHub Actions secret configuration; the workflow now supplies the documented alias `studyforge-release` directly.
+- Added a `keytool` preflight check to validate that the decoded keystore opens with the configured store password and contains the expected alias before Gradle release packaging.
+- Added clearer signing diagnostics so an alias/keystore mismatch fails in the preparation step rather than surfacing later as an opaque `packageRelease` error.
+
+### Changed
+- Updated app metadata to 2.1.1 (versionCode 6) and aligned APK artifact names.
+- Reduced required GitHub Actions signing secrets from four to three: keystore Base64, store password, and key password.
+
+### Verification
+- Workflow and Gradle configuration inspected in source. Android Gradle build, GitHub Actions execution, APK signature, and device installation remain unverified.
+
+### Compatibility
+- No application database, Room migration, JSON backup schema, question data, review history, or signing key was intentionally changed.
+- The original five-major-version requirements remain intact; incomplete FSRS, LaTeX rendering, editor/filter, and study-engine features remain on the roadmap.
+
+
+
 ## [Project documentation bundle] - 2026-11-23
 
 ### Documentation only

@@ -1,5 +1,33 @@
 # StudyForge Development Log
 
+## StudyForge 2.1.2 — V1/V2 feature implementation — 2026-11-23
+
+- Used the full uploaded project ZIP and `HANDOFF_FOR_NEW_CHAT.md` as the working source of truth; preserved the original five-version plan.
+- Implemented FSRS-6 scheduling source with the published 21 default parameters, stability/difficulty storage, whole local study-day elapsed intervals, retrievability and retention-target interval calculation. Legacy interval/ease data is retained and safely used to seed an unconverted card's first FSRS review.
+- Added Room database version 3 and migration 2→3 for FSRS columns and `study_settings`; no destructive migration was added.
+- Added a settings screen and persisted user-selected desired retention, max interval, daily new/review caps, order, retry delay, exam count/duration, and randomization.
+- Expanded study modes to Due, All, Practice, Random, Ordered, Topic, Weakest, and a basic answer-then-explanation Step-by-step flow. Practice does not update scheduler/review history.
+- Added configurable timed MCQ exam behavior, mark-for-review, submit confirmation and result review.
+- Added type/status/subject/chapter/topic/tag/collection filters and broader search.
+- Integrated native offline LaTeX rendering for the saved equation field and Markdown-like content previews; full structured rich-content editor remains unfinished.
+- Updated JSON backup to schema 3 with FSRS state and settings; schema 1/2 remain accepted. Importing an older schema preserves already-stored FSRS memory state for matching current question IDs and leaves current settings unchanged if absent in that backup.
+- Updated scheduler test source for FSRS initial states, lapse/relearning delays, retention/max-interval behaviour, retrievability, the 90% stability point, and whole local study-day handling. A standalone Kotlin smoke test of the scheduler passed; a SQLite smoke test executed the 2→3 migration SQL against a populated test table and confirmed existing row preservation/settings-table creation; and the schema-3 example JSON parsed successfully. The JUnit suite, Room runtime migration, and Android build were not run because this environment lacks Gradle and Android SDK. GitHub Actions build, Room runtime migration, official FSRS vector comparison, signed APK and device testing remain pending.
+- Added separate RaTeX MIT-code and KaTeX-font SIL Open Font License 1.1 notices, with the font attribution and full OFL text.
+- Kept the same release-signing alias workflow (`studyforge-release`) and do not regenerate or bundle the private keystore.
+- Updated `CHANGELOG.md`, `ROADMAP.md`, `BUILD_STATUS.md`, `IMPLEMENTATION_STATUS.md`, `README.md`, `PROJECT_PLAN.md`, `PROJECT_FILE_GUIDE.md`, and this handoff file. Previous entries were retained.
+
+
+## 2.1.1 signing workflow patch — 2026-11-23
+
+- Inspected the supplied 2.1.0 ZIP and followed its `HANDOFF_FOR_NEW_CHAT.md` instructions.
+- Investigated the reported GitHub Actions failure: `:app:packageRelease` could not find the alias value passed from `SIGNING_KEY_ALIAS`; the log rendered the requested alias as replacement characters.
+- Removed reliance on the `SIGNING_KEY_ALIAS` GitHub secret because the documented alias is a non-secret constant: `studyforge-release`.
+- Added a `keytool` preflight validation before Gradle release packaging, with a targeted diagnostic on mismatch.
+- Updated app version to 2.1.1 / versionCode 6 and aligned artifact names.
+- Kept the Room database at version 2, JSON backup schema at version 2, and preserved the original product plan and all previous release records.
+- Verification boundary: source/workflow edits only. No Android Gradle executable/SDK or actual GitHub Actions run was available here; CI, APK signature, and phone installation remain unverified.
+
+
 This log is append-only in spirit: new dated entries are added at the top; historical release notes are retained.
 
 ## 2.1.0 signing and release workflow — 2026-11-23
@@ -14,7 +42,7 @@ This log is append-only in spirit: new dated entries are added at the top; histo
 - FSRS, configurable review/exam settings, offline LaTeX rendering, and the full filter/rich-editor requirements remain open. They were not silently removed or described as completed.
 - Verification boundary: no Android SDK/Gradle build was available in this environment. No CI, APK signature, or physical-device update test has yet been confirmed.
 
-## Current source snapshot: 2.1.0
+## Historical source snapshot — 2.1.0 (retained)
 
 **Date:** 2026-11-23  
 **App versionCode:** 5  

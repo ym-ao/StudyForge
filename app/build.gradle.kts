@@ -25,8 +25,8 @@ android {
         applicationId = "com.studyforge.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "2.1.0"
+        versionCode = 7
+        versionName = "2.1.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -73,6 +73,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    // Native Canvas-based LaTeX renderer; bundled math engine works offline.
+    implementation("io.github.erweixin:ratex-android:0.1.15")
 
     implementation("androidx.room:room-runtime:2.8.5")
     implementation("androidx.room:room-ktx:2.8.5")
