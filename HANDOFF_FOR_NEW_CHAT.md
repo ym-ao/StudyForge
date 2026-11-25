@@ -455,3 +455,10 @@ The user reported GitHub Actions failing at `:app:compileDebugKotlin`: `StudyScr
 ## Latest CI follow-up — 2026-11-25
 
 The CI run progressed past Kotlin compilation and reported `141 tests completed, 5 failed`. All five were triaged. Production fixes: `MultipartExamRules.earnedPoints` now falls back to automatic marking for non-finite manual awards; `QuestionTypeAnalytics.summarize` now preserves first-seen review-log group order. Test-fixture corrections: invalid MCQ now has a non-matching answer/options combination (and a valid MCQ assertion was added); tag deduplication test includes the pre-existing tag; heading test uses a real newline. A targeted Kotlin smoke harness passed, as did the release verifier, V2 source-integrity verifier, and pinned FSRS-6 diagnostic. Do not claim the full Android unit suite passes until the next GitHub Actions run confirms it.
+
+## 2026-11-25 — GitHub Actions emulator boot timeout follow-up
+
+- The user's CI run reached the `Run Room runtime tests on Android emulator` step but failed with `Timeout waiting for emulator to boot`. This is an emulator startup/infrastructure failure: the action did not reach its `connectedDebugAndroidTest` script, so no Room runtime assertion is reported as failed by this log.
+- Updated `.github/workflows/android-apk.yml` to enable KVM permissions on the GitHub-hosted Ubuntu runner before launching the AVD, explicitly retain Linux hardware acceleration, and increase `emulator-boot-timeout` from the action's 600-second default to 900 seconds. API 35, x86_64, Pixel 2 profile and the Room test command remain unchanged.
+- This is a CI reliability adjustment only. No app source, Room schema/migrations, JSON backup schema, FSRS logic, app version, versionCode, signing material or original plan was changed.
+- Required confirmation: rerun GitHub Actions. A successful emulator boot is not yet claimed, and the Room runtime tests remain unexecuted until the connected Android test task completes.

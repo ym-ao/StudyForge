@@ -302,3 +302,10 @@ The first Android CI run after the missing Compose `Box` import fix completed 14
 - `TextFormattingRulesTest.headingPrefixesCurrentLineAndPreservesCaret`: the fixture used a literal backslash-plus-`n` instead of an actual newline. Corrected the test input/expected value to use an actual newline; production formatting behavior is unchanged.
 
 Validation in this environment: targeted Kotlin smoke harness passed for the five affected areas; `verify_release_2_1_24.py`, `verify_v2_source_integrity.py`, and the pinned FSRS-6 diagnostic passed. A full Gradle/JUnit run has NOT been executed locally (Gradle is unavailable here). The next GitHub Actions run is required to confirm the complete 141-test suite.
+
+## 2026-11-25 — GitHub Actions emulator boot timeout follow-up
+
+- The user's CI run reached the `Run Room runtime tests on Android emulator` step but failed with `Timeout waiting for emulator to boot`. This is an emulator startup/infrastructure failure: the action did not reach its `connectedDebugAndroidTest` script, so no Room runtime assertion is reported as failed by this log.
+- Updated `.github/workflows/android-apk.yml` to enable KVM permissions on the GitHub-hosted Ubuntu runner before launching the AVD, explicitly retain Linux hardware acceleration, and increase `emulator-boot-timeout` from the action's 600-second default to 900 seconds. API 35, x86_64, Pixel 2 profile and the Room test command remain unchanged.
+- This is a CI reliability adjustment only. No app source, Room schema/migrations, JSON backup schema, FSRS logic, app version, versionCode, signing material or original plan was changed.
+- Required confirmation: rerun GitHub Actions. A successful emulator boot is not yet claimed, and the Room runtime tests remain unexecuted until the connected Android test task completes.

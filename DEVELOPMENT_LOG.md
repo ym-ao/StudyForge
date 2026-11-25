@@ -580,3 +580,10 @@ Reference implementation: `https://github.com/open-spaced-repetition/py-fsrs/blo
 Reviewed the CI report (`141 tests completed, 5 failed`) and traced each failure to source or fixture behavior. Fixed two production issues: invalid/non-finite manual multipart awards now fall back to automatic marking, and question-type analytics preserve first-seen review group order. Corrected three test-fixture defects without weakening product validation: invalid MCQ now has an answer absent from its options (plus a valid-MCQ acceptance assertion); tag deduplication fixture now contains the duplicate tag; heading test now uses an actual newline rather than an escaped literal sequence.
 
 Targeted Kotlin smoke checks passed across multipart grading, CSV/MCQ preview, question-type analytics, tag operations, and heading formatting. The pinned FSRS-6 golden diagnostic and V2 source/release verifiers also passed. Full Android Gradle/JUnit verification remains pending in GitHub Actions.
+
+## 2026-11-25 — GitHub Actions emulator boot timeout follow-up
+
+- The user's CI run reached the `Run Room runtime tests on Android emulator` step but failed with `Timeout waiting for emulator to boot`. This is an emulator startup/infrastructure failure: the action did not reach its `connectedDebugAndroidTest` script, so no Room runtime assertion is reported as failed by this log.
+- Updated `.github/workflows/android-apk.yml` to enable KVM permissions on the GitHub-hosted Ubuntu runner before launching the AVD, explicitly retain Linux hardware acceleration, and increase `emulator-boot-timeout` from the action's 600-second default to 900 seconds. API 35, x86_64, Pixel 2 profile and the Room test command remain unchanged.
+- This is a CI reliability adjustment only. No app source, Room schema/migrations, JSON backup schema, FSRS logic, app version, versionCode, signing material or original plan was changed.
+- Required confirmation: rerun GitHub Actions. A successful emulator boot is not yet claimed, and the Room runtime tests remain unexecuted until the connected Android test task completes.
