@@ -23,6 +23,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -91,6 +92,7 @@ fun StudyScreen(
 ) {
     var mode by rememberSaveable { mutableStateOf("Due") }
     var index by rememberSaveable { mutableIntStateOf(0) }
+    var dueCompletedCount by rememberSaveable { mutableIntStateOf(0) }
     var revealed by rememberSaveable { mutableStateOf(false) }
     var selectedAnswer by rememberSaveable { mutableStateOf<String?>(null) }
     var checked by rememberSaveable { mutableStateOf(false) }
@@ -123,10 +125,11 @@ fun StudyScreen(
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }.timeInMillis
     }
-    val logsToday = reviewLogs.filter { it.reviewedAt >= midnight }
+    val logsToday = remember(reviewLogs, midnight) { reviewLogs.filter { it.reviewedAt >= midnight } }
     val newReviewedToday = logsToday.count { it.reviewMode == "New" }
     val reviewsToday = logsToday.count { it.reviewMode != "New" }
-    val due = questions.filter { it.dueAt == null || it.dueAt <= now }
+    // Due status changes at minute granularity; do not rebuild queues for every UI state update.
+    val due = remember(questions, now / 60_000L) { questions.filter { it.dueAt == null || it.dueAt <= now } }
     val remainingNew = (settings.newCardsPerDay - newReviewedToday).coerceAtLeast(0)
     val remainingReviews = (settings.reviewCardsPerDay - reviewsToday).coerceAtLeast(0)
     val orderReviews = when (settings.reviewOrder) {
@@ -141,23 +144,32 @@ fun StudyScreen(
     val dueReview = remember(due, settings.reviewOrder, remainingReviews) {
         due.filter { it.learningState != "New" }.let { list -> if (orderReviews == null) list.shuffled() else list.sortedWith(orderReviews) }.take(remainingReviews)
     }
-    val dueQuestions = dueNew + dueReview
+    val dueQuestions = remember(dueNew, dueReview) { dueNew + dueReview }
     val randomQuestions = remember(questions, mode) { if (mode == "Random") questions.shuffled() else emptyList() }
-    val topics = remember(questions) { questions.map { it.topic.trim() }.filter { it.isNotBlank() }.distinct().sorted() }
-    val modeQuestions = when (mode) {
-        "Due" -> dueQuestions
-        "Random" -> randomQuestions
-        "Ordered" -> questions.sortedWith(compareBy<QuestionEntity> { it.subject.lowercase() }.thenBy { it.chapter.lowercase() }.thenBy { it.topic.lowercase() }.thenBy { it.createdAt })
-        "Weakest" -> questions.sortedWith(compareByDescending<QuestionEntity> { it.incorrectCount }.thenByDescending { it.fsrsDifficulty })
-        "Topic" -> if (selectedTopic.isBlank()) questions else questions.filter { it.topic.equals(selectedTopic, true) }
-        else -> questions
+    val topics = remember(questions) { questions.asSequence().map { it.topic.trim() }.filter { it.isNotBlank() }.distinct().sorted().toList() }
+    val modeQuestions = remember(questions, mode, selectedTopic, dueQuestions, randomQuestions) {
+        when (mode) {
+            "Due" -> dueQuestions
+            "Random" -> randomQuestions
+            "Ordered" -> questions.sortedWith(compareBy<QuestionEntity> { it.subject.lowercase() }.thenBy { it.chapter.lowercase() }.thenBy { it.topic.lowercase() }.thenBy { it.createdAt })
+            "Weakest" -> questions.sortedWith(compareByDescending<QuestionEntity> { it.incorrectCount }.thenByDescending { it.fsrsDifficulty })
+            "Topic" -> if (selectedTopic.isBlank()) questions else questions.filter { it.topic.equals(selectedTopic, true) }
+            else -> questions
+        }
     }
     val collectionQuestionIds = remember(collectionLinks, activeSessionPreset?.collectionId) {
         activeSessionPreset?.collectionId?.takeIf { it.isNotBlank() }?.let { id -> collectionLinks.filter { it.collectionId == id }.map { it.questionId }.toSet() }
     }
-    val activeQuestions = activeSessionPreset?.let { preset ->
-        StudySessionRules.filterQuestions(modeQuestions, preset, collectionQuestionIds)
-    } ?: modeQuestions
+    val activeQuestions = remember(modeQuestions, activeSessionPreset, collectionQuestionIds) {
+        activeSessionPreset?.let { preset ->
+            StudySessionRules.filterQuestions(modeQuestions, preset, collectionQuestionIds)
+        } ?: modeQuestions
+    }
+    val contentBlocksByQuestion = remember(contentBlocks) { contentBlocks.groupBy { it.questionId } }
+
+    LaunchedEffect(mode, selectedTopic, activeSessionPresetId) {
+        dueCompletedCount = 0
+    }
 
     LaunchedEffect(mode, activeQuestions.size, selectedTopic) {
         index = 0
@@ -362,19 +374,25 @@ fun StudyScreen(
 
         val safeIndex = index.coerceIn(0, activeQuestions.lastIndex)
         val q = activeQuestions[safeIndex]
+        val progressTotal = (dueCompletedCount + activeQuestions.size).coerceAtLeast(1)
+        val progressPosition = if (mode == "Due") dueCompletedCount + safeIndex + 1 else safeIndex + 1
         var revealedHintIds by remember(q.id) { mutableStateOf(emptySet<String>()) }
         val options = remember(q.id, q.optionsJson) {
             runCatching { JSONArray(q.optionsJson).let { array -> (0 until array.length()).map { array.optString(it) } } }.getOrDefault(emptyList())
         }
+        Text("Card $progressPosition of $progressTotal", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LinearProgressIndicator(
+            progress = progressPosition.toFloat() / progressTotal.toFloat(),
+            modifier = Modifier.fillMaxWidth()
+        )
         Card(shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(q.type.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
-                    Text("${safeIndex + 1} / ${activeQuestions.size}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 RichContentText(if (q.type == "Cloze" && !revealed) ClozeRules.mask(q.prompt) else q.prompt, style = MaterialTheme.typography.titleLarge)
-                contentBlocks.filter { it.questionId == q.id }.sortedBy { it.position }.forEach { block ->
+                contentBlocksByQuestion[q.id].orEmpty().sortedBy { it.position }.forEach { block ->
                     when (block.kind.uppercase()) {
                         "LATEX" -> if (block.text.isNotBlank()) LatexFormulaView(block.text)
                         "HEADING" -> Text(block.text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -457,7 +475,7 @@ fun StudyScreen(
                         RichContentText("Answer: ${q.answer}", style = MaterialTheme.typography.titleMedium)
                     }
                 } else {
-                    if (!revealed) Button(onClick = { revealed = true; stepByStepStage = 1 }, modifier = Modifier.fillMaxWidth()) { Text("Reveal answer") }
+                    if (!revealed) Button(onClick = { revealed = true; stepByStepStage = 1 }, modifier = Modifier.fillMaxWidth()) { Text("Show answer") }
                     else {
                         HorizontalDivider()
                         Text("Answer", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -495,16 +513,18 @@ fun StudyScreen(
                                 else -> if (mode == "Exam") "Exam" else "Review"
                             }
                             onReview(q, rating, wasCorrect, if (wasCorrect == false) mistakeCategory else null, reviewMode)
-                            if (mode == "Due") index = 0 else index = (safeIndex + 1) % activeQuestions.size
+                            if (mode == "Due") { dueCompletedCount++; index = 0 } else index = (safeIndex + 1) % activeQuestions.size
                             revealed = false; checked = false; selectedAnswer = null; mistakeCategory = ""; stepByStepStage = 0
                         }, modifier = Modifier.weight(1f)) { Text(rating) }
                     }
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = { index = if (safeIndex == 0) activeQuestions.lastIndex else safeIndex - 1; revealed = false; checked = false; selectedAnswer = null; mistakeCategory = ""; stepByStepStage = 0 }, modifier = Modifier.weight(1f)) { Text("Previous") }
-            OutlinedButton(onClick = { index = (safeIndex + 1) % activeQuestions.size; revealed = false; checked = false; selectedAnswer = null; mistakeCategory = ""; stepByStepStage = 0 }, modifier = Modifier.weight(1f)) { Text("Next") }
+        if (mode != "Due") {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { index = if (safeIndex == 0) activeQuestions.lastIndex else safeIndex - 1; revealed = false; checked = false; selectedAnswer = null; mistakeCategory = ""; stepByStepStage = 0 }, modifier = Modifier.weight(1f)) { Text("Previous") }
+                OutlinedButton(onClick = { index = (safeIndex + 1) % activeQuestions.size; revealed = false; checked = false; selectedAnswer = null; mistakeCategory = ""; stepByStepStage = 0 }, modifier = Modifier.weight(1f)) { Text("Next") }
+            }
         }
         Text("Ratings: Again, Hard, Good, and Easy update FSRS memory state. Practice mode does not record reviews.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

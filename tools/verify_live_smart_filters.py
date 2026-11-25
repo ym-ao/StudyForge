@@ -9,12 +9,13 @@ tests = (ROOT / "app/src/test/java/com/studyforge/app/data/QuestionLibraryFilter
 
 assert "fun countMatches(" in filter_source
 assert "questions.count { matches(it, criteria, collectionQuestionIds) }" in filter_source
-assert "liveFilterMatchCounts = remember(questions, links, savedFilterPresets)" in ui_source
+assert "LaunchedEffect(questions, links, savedFilterPresets)" in ui_source
+assert "liveFilterMatchCounts = withContext(Dispatchers.Default)" in ui_source
 assert "QuestionLibraryFilter.countMatches(questions, savedCriteria, presetCollectionIds)" in ui_source
 assert 'Text("Live smart filters (${savedFilterPresets.size})"' in ui_source
 assert 'Text("${preset.name} · ${liveFilterMatchCounts[preset.id] ?: 0}")' in ui_source
 assert "savedFilterCountsAreRecomputedFromCurrentQuestions" in tests
 assert "deletedCollectionReferenceProducesNoMatchesInsteadOfStaleMembership" in tests
-print("PASS: saved-filter match counts are recalculated from current questions and collection links")
+print("PASS: saved-filter match counts are recalculated from current questions and links off the UI thread")
 print("PASS: stale/deleted collection references safely show zero matches")
 print("LIMIT: static source contract only; Android JUnit/UI execution not performed")

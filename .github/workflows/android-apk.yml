@@ -48,6 +48,7 @@ jobs:
           python3 tools/verify_live_smart_filters.py
           python3 tools/verify_bulk_selection.py
           python3 tools/verify_session_preset_edit.py
+          python3 tools/verify_study_ui_performance.py
           python3 tools/verify_release_2_1_24.py
           python3 tools/verify_v2_source_integrity.py
 

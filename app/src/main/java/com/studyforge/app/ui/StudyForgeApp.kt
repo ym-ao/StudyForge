@@ -111,7 +111,10 @@ import com.studyforge.app.data.StudySettingsEntity
 import com.studyforge.app.data.ExamAttemptEntity
 import com.studyforge.app.data.recordGradedReview
 import com.studyforge.app.data.StudyDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -598,6 +601,11 @@ private fun LibraryScreen(
     onDelete: (QuestionEntity) -> Unit
 ) {
     var search by rememberSaveable { mutableStateOf("") }
+    var appliedSearch by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(search) {
+        delay(180)
+        appliedSearch = search
+    }
     var typeFilter by rememberSaveable { mutableStateOf("All") }
     var statusFilter by rememberSaveable { mutableStateOf("All") }
     var subjectFilter by rememberSaveable { mutableStateOf("") }
@@ -641,21 +649,33 @@ private fun LibraryScreen(
         if (collectionId == null) emptySet() else links.filter { it.collectionId == collectionId }.map { it.questionId }.toSet()
     }
     val criteria = LibraryFilterCriteria(
-        query = search, type = typeFilter, status = statusFilter, subject = subjectFilter,
+        query = appliedSearch, type = typeFilter, status = statusFilter, subject = subjectFilter,
         chapter = chapterFilter, topic = topicFilter, tag = tagFilter, collectionId = collectionId,
         difficulty = difficultyFilter, exam = examFilter, performance = performanceFilter,
         sourceTitle = sourceTitleFilter, sourceDetail = sourceDetailFilter,
         createdAfter = createdAfterFilter, createdBefore = createdBeforeFilter,
         updatedAfter = updatedAfterFilter, updatedBefore = updatedBeforeFilter
     )
-    val filtered = questions.filter { q -> QuestionLibraryFilter.matches(q, criteria, collectionQuestionIds) }
-    val liveFilterMatchCounts = remember(questions, links, savedFilterPresets) {
-        savedFilterPresets.associate { preset ->
-            val savedCriteria = preset.toCriteria()
-            val presetCollectionIds = savedCriteria.collectionId?.let { id ->
-                links.asSequence().filter { it.collectionId == id }.map { it.questionId }.toSet()
-            } ?: emptySet()
-            preset.id to QuestionLibraryFilter.countMatches(questions, savedCriteria, presetCollectionIds)
+    var filtered by remember { mutableStateOf(emptyList<QuestionEntity>()) }
+    var filtering by remember { mutableStateOf(true) }
+    LaunchedEffect(questions, criteria, collectionQuestionIds) {
+        filtering = true
+        val result = withContext(Dispatchers.Default) {
+            questions.filter { q -> QuestionLibraryFilter.matches(q, criteria, collectionQuestionIds) }
+        }
+        filtered = result
+        filtering = false
+    }
+    var liveFilterMatchCounts by remember { mutableStateOf(emptyMap<String, Int>()) }
+    LaunchedEffect(questions, links, savedFilterPresets) {
+        liveFilterMatchCounts = withContext(Dispatchers.Default) {
+            savedFilterPresets.associate { preset ->
+                val savedCriteria = preset.toCriteria()
+                val presetCollectionIds = savedCriteria.collectionId?.let { id ->
+                    links.asSequence().filter { it.collectionId == id }.map { it.questionId }.toSet()
+                } ?: emptySet()
+                preset.id to QuestionLibraryFilter.countMatches(questions, savedCriteria, presetCollectionIds)
+            }
         }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
@@ -734,7 +754,7 @@ private fun LibraryScreen(
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("${filtered.size} of ${questions.size} questions", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            Text("${filtered.size} of ${questions.size} questions${if (filtering) " · filtering" else ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
             TextButton(onClick = { selectionMode = !selectionMode; selectedQuestionIds = emptySet() }) { Text(if (selectionMode) "Done selecting" else "Select multiple") }
         }
         if (selectionMode) {
@@ -779,7 +799,7 @@ private fun LibraryScreen(
                                     IconButton(onClick = { onDelete(q) }, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Delete, "Delete") }
                                 }
                             }
-                            RichContentText(q.prompt, style = MaterialTheme.typography.titleMedium)
+                            RichContentText(q.prompt.take(360).let { preview -> if (q.prompt.length > 360) "$preview…" else preview }, style = MaterialTheme.typography.titleMedium)
                             val meta = listOf(q.subject, q.chapter, q.topic, q.exam).filter { it.isNotBlank() }.joinToString(" • ")
                             if (meta.isNotBlank()) Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -794,7 +814,7 @@ private fun LibraryScreen(
                                 }
                             }
                             if (q.tagsCsv.isNotBlank()) Text("Tags: ${q.tagsCsv}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
-                            if (q.latex.isNotBlank()) LatexFormulaView(q.latex, Modifier.fillMaxWidth())
+                            if (q.latex.isNotBlank()) Text("Math formula available · open question to view", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
                         }
                     }
                 }

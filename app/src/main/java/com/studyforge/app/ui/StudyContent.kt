@@ -25,29 +25,62 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.TextView
 import io.ratex.RaTeXView
 import com.studyforge.app.data.ContentBlockParsing
 
-/** Native Canvas-based math rendering. The renderer and fonts are packaged in the APK. */
+/** Native Canvas-based math rendering with a non-crashing plain-text fallback. */
 @Composable
 fun LatexFormulaView(latex: String, modifier: Modifier = Modifier) {
     val source = latex.trim().take(5000)
     if (source.isBlank()) return
     AndroidView(
-        modifier = modifier.fillMaxWidth().heightIn(min = 42.dp),
+        modifier = modifier.fillMaxWidth().heightIn(min = 42.dp, max = 240.dp),
         factory = { context ->
+            FrameLayout(context).apply { renderFormulaSafely(source) }
+        },
+        update = { container -> container.renderFormulaSafely(source) }
+    )
+}
+
+/** Avoid repeating expensive parsing on unrelated Compose recompositions. */
+private fun FrameLayout.renderFormulaSafely(source: String) {
+    if (tag == source && childCount > 0) return
+    tag = source
+    removeAllViews()
+
+    val rendered = if (source.length <= 1500) {
+        runCatching {
             RaTeXView(context).apply {
-                this.latex = source
+                latex = source
                 fontSize = 22f
                 displayMode = true
             }
-        },
-        update = { view ->
-            view.latex = source
-            view.fontSize = 22f
-            view.displayMode = true
+        }.getOrNull()
+    } else null
+
+    if (rendered != null) {
+        addView(rendered, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+    } else {
+        val fallback = TextView(context).apply {
+            text = if (source.length > 1500) {
+                "Formula is too long to preview. Open the question to edit it."
+            } else {
+                "Formula preview unavailable\n$source"
+            }
+            textSize = 16f
+            setPadding(10, 8, 10, 8)
         }
-    )
+        addView(fallback, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+    }
 }
 
 /** Small offline Markdown-like renderer for headings, bullets, bold, italic and inline code. */

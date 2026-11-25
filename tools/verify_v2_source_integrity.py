@@ -31,6 +31,7 @@ bulk_collection_check = read("tools/verify_bulk_collection.py")
 smart_filter_check = read("tools/verify_live_smart_filters.py")
 bulk_selection_check = read("tools/verify_bulk_selection.py")
 session_preset_edit_check = read("tools/verify_session_preset_edit.py")
+study_ui_performance_check = read("tools/verify_study_ui_performance.py")
 session_preset_rules = read("app/src/main/java/com/studyforge/app/data/StudySessionPresetRules.kt")
 session_preset_tests = read("app/src/test/java/com/studyforge/app/data/StudySessionPresetRulesTest.kt")
 tag_rules = read("app/src/main/java/com/studyforge/app/data/TagText.kt")
@@ -79,9 +80,11 @@ assert "verify_bulk_collection.py" in workflow
 assert "verify_live_smart_filters.py" in workflow
 assert "verify_bulk_selection.py" in workflow
 assert "verify_session_preset_edit.py" in workflow
+assert "verify_study_ui_performance.py" in workflow
 assert app_ui.count("QuestionSelectionRules.resolve(questions, selectedQuestionIds)") == 4
 assert "bulk actions resolve selected IDs" in bulk_selection_check
 assert "saved study-session presets can be edited" in session_preset_edit_check
+assert "LaTeX renderer caches results" in study_ui_performance_check
 assert "fun hasNameConflict(" in session_preset_rules and "fun existingForSave(" in session_preset_rules
 assert "editingCannotRenameOverAnotherPreset" in session_preset_tests
 assert "missingEditedPresetDoesNotHijackSameNamedPreset" in session_preset_tests
@@ -93,7 +96,8 @@ assert "addTrimsAndDeduplicatesCaseInsensitively" in tag_tests
 assert "bulk tag" in bulk_tag_check.lower()
 assert "onBulkCollection" in app_ui and "QuestionVersionRules.createSnapshot(current" in bulk_collection_check
 assert "fun countMatches(" in read("app/src/main/java/com/studyforge/app/data/QuestionLibraryFilter.kt")
-assert "liveFilterMatchCounts = remember(questions, links, savedFilterPresets)" in app_ui
+assert "LaunchedEffect(questions, links, savedFilterPresets)" in app_ui
+assert "liveFilterMatchCounts = withContext(Dispatchers.Default)" in app_ui
 assert "countMatches(questions, savedCriteria, presetCollectionIds)" in app_ui
 assert "savedFilterCountsAreRecomputedFromCurrentQuestions" in read("app/src/test/java/com/studyforge/app/data/QuestionLibraryFilterTest.kt")
 assert "live saved-filter" in smart_filter_check.lower()
@@ -165,4 +169,5 @@ print("PASS: bulk collection add/remove is transactional and preserves membershi
 print("PASS: saved smart filters show live counts recalculated from current questions and links")
 print("PASS: bulk actions resolve selections across the full Library, even after filters change")
 print("PASS: saved study-session presets support editing and stable-ID renaming")
+print("PASS: Study is one-card-at-a-time; Library filtering is off-main-thread; math previews are guarded")
 print("LIMIT: instrumentation tests are source-added but have not run in this local environment")
