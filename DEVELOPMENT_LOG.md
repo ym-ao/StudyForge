@@ -565,3 +565,11 @@ Reference implementation: `https://github.com/open-spaced-repetition/py-fsrs/blo
 
 ---
 
+
+## 2026-11-25 CI build failure correction — missing Compose Box import
+
+- User-provided GitHub Actions log showed `:app:compileDebugKotlin` failing at `StudyScreens.kt:187` with `Unresolved reference 'Box'`, followed by two composable-context errors at lines 188 and 191.
+- Inspected the exact source in the FSRS-6 corrected project ZIP. `StudyScreen` already uses `Box { ... }` inside its `@Composable` dialog content, but the file's imports omitted `androidx.compose.foundation.layout.Box`.
+- Added the missing `Box` import only. The two composable-context diagnostics are expected to be cascading errors from the unresolved `Box` call; they must be confirmed gone by the next GitHub Actions compile.
+- No runtime behavior, scheduler logic, app version/versionCode, Room schema, JSON backup schema, migrations, signing configuration or original plan changed.
+- Verification boundary: source/import inspection completed locally. A full Android Gradle compile/lint/JUnit run has not been executed here; rerun GitHub Actions to confirm compilation and reveal any subsequent independent errors.

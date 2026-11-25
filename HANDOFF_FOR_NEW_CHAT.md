@@ -445,3 +445,8 @@ The current working package remains 2.1.24/versionCode 28 (no new APK release). 
 - Extended `tools/verify_v2_source_integrity.py` to require this test and its fixture content. Local source-integrity verification passes.
 - The instrumentation test has NOT been executed. This is not historical migration coverage or a JSON backup/restore round-trip. Android Gradle/JUnit, emulator CI, signing and device acceptance remain open.
 - App remains 2.1.24/versionCode 28, Room 15, JSON backup 15. No migration, release, signing, original-plan or FSRS change.
+
+
+## 2026-11-25 — CI compile failure fix
+
+The user reported GitHub Actions failing at `:app:compileDebugKotlin`: `StudyScreens.kt:187` could not resolve `Box`, with composable-context errors immediately after. The source was inspected and lacked `import androidx.compose.foundation.layout.Box` despite using `Box { ... }` inside the saved-session dialog. That import has now been added. The follow-on composable errors are expected to be cascading but must be confirmed by rerunning CI. No Android Gradle build has yet verified the fix. Next action: push the new ZIP contents and rerun GitHub Actions; inspect the next first compiler error if any. No app/version/schema/signing/original-plan changes.

@@ -589,3 +589,7 @@ All notable StudyForge changes are recorded here. Newest release first.
 - Updates target the original preset by stable ID, so changing its name updates that preset instead of creating a duplicate. Creating a new preset remains a separate action, and delete remains available.
 - Added `tools/verify_session_preset_edit.py` and wired it into CI and the source-integrity gate. This is a static source-contract check; Android Compose/JUnit runtime has not been run locally.
 - No FSRS files, app version, Room schema, backup schema, migrations, signing identity or original `StudyForge_Plan.txt` were changed.
+
+## 2.1.24 — CI compile fix (2026-11-25)
+
+- Added the missing Jetpack Compose `Box` layout import to `StudyScreens.kt`, resolving the reported unresolved-reference source defect. Android CI rerun is pending; no release version bump.

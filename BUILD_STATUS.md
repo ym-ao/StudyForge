@@ -282,3 +282,10 @@ Official FSRS-6 upstream reference vectors, full smart-collection/bulk workflows
 - This corrects an earlier investigation note that relied on the newer `main/fsrs/scheduler.py` formula and treated its unclamped mean-reversion target as the pinned v6.0.0 contract. The actual pinned commit's source is `fsrs/fsrs.py`, and its behavior is different. Do not use current-main source as a substitute for the pinned reference.
 - No production FSRS code was changed. This task was diagnosis only. Before changing production, decide explicitly whether StudyForge's compatibility target is the exact py-fsrs v6.0.0 defaults/behavior or a newer FSRS-6 parameter baseline. If the target remains pinned v6.0.0, the defaults and the two behavioral differences above must be reconciled and regression-tested together.
 - Source references: pinned upstream implementation `https://raw.githubusercontent.com/open-spaced-repetition/py-fsrs/352c7a2/fsrs/fsrs.py`; pinned fixture `https://raw.githubusercontent.com/open-spaced-repetition/py-fsrs/352c7a2/tests/test_basic.py`. Local diagnostic output was reproduced successfully on 2026-11-25. This is a standalone source harness, not Android Gradle/JUnit or emulator verification.
+
+## 2026-11-25 — GitHub Actions Kotlin compile correction
+
+- Investigated the user-reported `:app:compileDebugKotlin` failure in `StudyScreens.kt` (`Box` unresolved at line 187; composable-context follow-on diagnostics at lines 188 and 191).
+- The corrected project source used `Box` in the saved-session dialog but lacked `import androidx.compose.foundation.layout.Box`. Added that import.
+- This is a targeted compile-source fix; no production logic or version/schema/signing metadata changed. The next GitHub Actions run is required to verify that the cascading composable errors disappear and to identify any further compiler errors.
+- Not claimed as fixed by a successful Android build: Gradle/Android compile, lint, JUnit, emulator and device tests remain pending until CI is rerun.
