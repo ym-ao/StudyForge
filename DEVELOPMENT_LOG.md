@@ -1,3 +1,71 @@
+## 2026-11-25 — saved-session safety follow-up (FSRS excluded)
+
+- Fixed a rename collision in saved study-session editing: editing always resolves the original preset by stable ID; attempting to rename it to another preset's name now shows a visible conflict and disables Save rather than overwriting the other preset. New presets retain the existing behavior where saving with an existing name updates that preset.
+- Added a confirmation dialog before deleting a saved session. Confirming deletion clears the active selection when that preset was in use; cancelling leaves it intact.
+- Added `StudySessionPresetRules` and four focused JUnit regression cases for rename collisions, unchanged names, create-by-existing-name behavior, and stale edit IDs. Extended `tools/verify_session_preset_edit.py` and the source-integrity gate.
+- FSRS source/tests and `StudyForge_Plan.txt` remain untouched. App remains 2.1.24/versionCode 28, Room schema 15, JSON backup schema 15; no migration, release, or signing changes. Android Gradle/JUnit/Compose runtime still requires CI/device verification.
+
+## 2026-11-25 continued V2 preparation — bulk Library tags (no release bump)
+- Corrected stale multipart-editor helper text: multipart exam scoring and post-submission point adjustments are already connected; the editor no longer claims otherwise.
+
+- Added bulk Add tag / Remove tag actions to Library multi-select. The operation affects only the currently visible selected questions.
+- Tag additions create/update the normalized tag catalogue entry. A comma is rejected because question tags are currently stored as comma-separated text and a comma would split one requested tag into multiple tags.
+- Changed questions receive a pre-change content snapshot in question version history, and tag updates run in one Room transaction. Unchanged questions do not receive redundant versions.
+- Added `TagText.add` regression cases and `tools/verify_bulk_tagging.py`; wired the verifier into GitHub Actions and the current source-integrity gate.
+- Six standalone Kotlin tag-rule assertions and current static/release/backup/SQLite migration checks passed locally. Android JUnit and full app runtime remain unverified.
+- FSRS code and tests were not touched. No version, Room/JSON schema, migration, signing or original blueprint change.
+
+# 2026-11-25 — StudyForge 2.1.24 V2 preparation continuation
+
+- Reopened the exact `StudyForge-2.1.24-continued-audit.zip` source package and reviewed its handoff, current audit, implementation matrix, roadmap, build workflow, Gradle config, scheduler, tests and Room migrations before editing.
+- Found a real CI mismatch: `.github/workflows/android-apk.yml` still called `verify_release_2_1_23.py` even though the current app and artifacts are 2.1.24. Corrected it to call `verify_release_2_1_24.py`.
+- Added `tools/verify_v2_source_integrity.py` and wired it into CI. It statically checks app/versionCode, Room schema and registered migrations 1→2 through 14→15, JSON export/import schema 15/1–15, current release verifier, migration smoke-check workflow steps, artifact names and signing-secret/alias contract. It explicitly identifies itself as static validation, not runtime testing.
+- Added a same-day Hard short-term FSRS-6 regression case to `Fsrs6ReferenceInvariantTest.kt`; expected behavior is no reduction below the prior stability for this fixture.
+- Local execution passed: `verify_release_2_1_24.py`, `verify_v2_source_integrity.py`, SQLite migration checks 7→8 through 14→15, and `verify_backup_schema_15.py`.
+- The Android Gradle/JUnit suite, Room runtime migration, app-level backup/restore, GitHub Actions, signed release APK and physical device were not available/used here and remain unverified.
+- Original `StudyForge_Plan.txt` was not edited. Room and backup schema remain 15. App version remains 2.1.24 / versionCode 28; no APK release is claimed.
+
+---
+
+## 2026-11-24 — StudyForge 2.1.21 implementation
+
+- Started from the verified 2.1.20 self-contained ZIP and retained Room schema 15 / JSON backup schema 15; no data-model migration was needed.
+- Implemented a recursive, stable-ID-aware comparison of stored question snapshots against current content, including metadata, rich-content blocks, multipart parts and collection membership.
+- Added before/current values in the version-history UI, bounded display output, and size-only summaries for embedded image payloads.
+- Added focused QuestionVersionRules JVM tests and a release consistency checker; configured a JVM JSON implementation for tests.
+- No actor identity was fabricated. Current version history has timestamps and version numbers but no authenticated user identity.
+- Full Android build/JUnit, Room runtime, JSON round-trip, CI, signing and device verification remain pending.
+
+---
+
+# StudyForge 2.1.19 — 2026-11-24
+
+- Started from the exact 2.1.18 self-contained ZIP and inspected its handoff, original plan, source tree, Room entities/DAO/migrations, backup/import/export, editor, study screens, tests and workflow.
+- Added question provenance fields `sourceTitle` and `sourceDetail` with an additive Room migration 12→13; old questions receive empty values and retain all prior content. Added editor fields, search inclusion and study-card display.
+- Extended CSV columns to include provenance. JSON schema 13 exports/imports provenance; older schema imports remain supported. Version snapshots include and restore provenance while continuing to preserve live scheduler/review state.
+- Added preview-first CSV/Anki TSV import. The preview classifies new rows, stable-ID updates, duplicates and invalid rows; duplicate IDs/content are skipped, and malformed/unsupported rows receive row-numbered diagnostics. Import is only committed after the user confirms.
+- Added tests for duplicate detection, invalid rows, stable-ID updates, Anki duplicates and source-field CSV/search behavior. Added exact SQLite migration 12→13, schema-13 backup and release source checks.
+- Preserved the original `StudyForge_Plan.txt`, package/application ID, fixed signing alias and external signing-secret contract. No signing key or credentials were accessed or packaged.
+- Local verification actually executed: SQLite migration scripts 7→8, 8→9, 9→10, 10→11, 11→12 and 12→13 all passed; schema-13 backup check and release source check passed; standalone Kotlin interchange harness passed 10 assertions. Parser-only scan found no syntax diagnostics but had 7,736 dependency-related diagnostics and is not a full compile.
+- Full Android build/JUnit, Room runtime, backup round-trip, CI, signed APK and device acceptance remain pending.
+
+---
+
+# StudyForge 2.1.18 — 2026-11-24
+
+- Started from the exact 2.1.16 self-contained ZIP, re-read its handoff and original `StudyForge_Plan.txt`, and audited the current Room schema, backup code, editor, study/exam screens, library, and workflow before changing source.
+- Added CSV question import/export and Anki-compatible TSV import/export for simple fields; documented that JSON remains the only complete backup format.
+- Added True/False, exact-match Numerical and Cloze authoring/study paths, including timed-exam support for True/False and Numerical questions.
+- Added multi-select bulk status/difficulty changes, manual due-date controls and scheduler reset that retains lifetime counters/review logs.
+- Added collection-aware saved study sessions with collection deletion cleanup and schema-11 backup compatibility.
+- Added persistent question-version snapshots, history/restore UI and schema-12 backup support. Version restoration intentionally restores content/collections only and preserves current scheduling/review state.
+- Improved multi-line heading/bullet formatting, added underline/highlight rendering and expanded question status selection. Question edits, bulk metadata changes and CSV/JSON imports snapshot previous content before replacing it; restoring a version also snapshots the current state so it can be undone. Added focused tests for interchange, cloze, manual scheduling, collection filters and formatting.
+- Added additive Room migrations 10→11 and 11→12; no existing table is rebuilt. Original `StudyForge_Plan.txt` was preserved unchanged.
+- Local checks: SQLite migrations 7→8 through 11→12, schema-12 backup checks, release source check, standalone Kotlin helpers and session filter harness passed. A parser-only scan had no syntax diagnostics but is not a full compile.
+- Full Android build/JUnit, Room runtime, backup round-trip, CI, signing and device acceptance remain pending; no APK build is claimed.
+
+---
+
 # StudyForge 2.1.9 — 2026-11-23
 
 - Uploaded `StudyForge-v2.1.8-self-contained-handoff.zip` was extracted and its handoff instructions followed. Audited the existing content-block entity, Room schema 8, backup import/export, editor, study-card renderer and workflow before modifying code.
@@ -256,3 +324,244 @@ This log is append-only in spirit: new dated entries are added at the top; histo
 - Corrected the test input to `Physics, Chemistry, MDCAT`. Kept production `TagText.rename` unchanged because its behavior was consistent with the supplied input.
 - Bumped app to 2.1.13 / versionCode 18; Room and JSON schemas remain 9. Updated workflow artifact names and release docs.
 - Full Gradle/JUnit rerun, CI, signed APK and device verification remain pending.
+
+
+## 2026-11-24 — StudyForge 2.1.14 manual multipart marking
+
+- Audited the uploaded 2.1.13 ZIP against the handoff, original plan, current implementation matrix, Room source, backup import/export and CI workflow.
+- Corrected current-version metadata in PROJECT_PLAN.md (2.1.13/versionCode 18 had been contradicted by a stale versionCode 17 header); preserved the historical 2.1.10 snapshot as history.
+- Implemented manual examiner-awarded points per multipart part on the results screen. Awards are finite and clamped to [0, part maximum]. Automatic grading remains the default.
+- Exam review logs are now recorded only after the final grading action, using the adjusted total.
+- Added unit test source for manual award override, clamping and invalid award fallback.
+- Advanced app to 2.1.14/versionCode 19; Room and JSON backup schemas remain 9. Updated workflow artifact labels.
+- A standalone Kotlin harness compiled the pure multipart grading helper against a minimal entity stub and passed its manual-award, bounds and aggregation assertions. The Gradle/JUnit suite could not be run because Gradle is not installed and the source ZIP has no wrapper. No GitHub Actions run, signed APK validation or Android-device test was performed in this environment.
+
+
+## 2026-11-24 — StudyForge 2.1.15 implementation
+
+- Audited the uploaded 2.1.14 source ZIP and handoff before editing. Existing Room schema 9 and JSON backup schema 9 were the source baseline.
+- Added `ExamAttemptEntity` and DAO observation/upsert methods; Room migration 9→10 creates an indexed attempt-history table. It deliberately has no question foreign key so completed attempt snapshots survive question deletion.
+- Timed exam submission now persists an attempt snapshot with stable question IDs, question metadata, user responses, correct-answer snapshots, per-part automatic/manual awarded points, possible points, marked/answered state, duration and weighted total. Existing review-log creation still occurs after the final grading action.
+- Progress UI now reports saved attempt count, average/best percentage, and recent attempt history.
+- JSON backup advances to schema 10, includes `examAttempts`, accepts legacy schemas 1–9, and upserts attempts only when present. It never deletes pre-existing attempts when an older backup is imported.
+- Added `ExamAttemptRulesTest`, SQLite migration 9→10 and schema-10 backup checks; wired the Python checks into GitHub Actions.
+- Local checks: migration 7→8 (7 checks), migration 8→9, migration 9→10, and schema-10 backup fixture all passed. Full Android build/test and device checks were not available/performed.
+
+
+## 2026-11-24 — StudyForge 2.1.16 editor and analytics improvements
+
+- Started from the supplied 2.1.15 source package and preserved its original five-version blueprint, app ID, signing workflow, Room schema 10, JSON schema 10, migrations 1→2 through 9→10, and backup compatibility.
+- Implemented selection-aware Markdown formatting for Bold, Italic, Heading, Bullet and Code. It wraps selected text or inserts a placeholder with the inner text selected when the cursor has no selection. Wired the component into question prompt, answer, explanation, and multipart prompt/answer/explanation and plain-text/heading/list content-block authoring.
+- Added pure Kotlin formatting regression test source for selected text, empty selection, heading insertion, bullet removal and reversed selection. A standalone kotlinc harness executed five matching assertions successfully.
+- Expanded exam analytics with median score, score-band distribution, and latest-five vs previous-five trend; trend is suppressed until ten attempts exist. Non-finite imported percentages are normalized to zero before aggregation. Added JUnit test source for these calculations.
+- Expanded FSRS-6 same-day checks for the short-term update equation for Good, Easy and Again ratings. These are equation-based checks, not upstream end-to-end golden vectors.
+- Advanced app metadata to 2.1.16 / versionCode 21 and updated workflow artifact labels. No Room or JSON schema change was needed.
+- Full Android Gradle/Compose/KSP compilation and JUnit, Room runtime migration, Android backup/restore round-trip, GitHub Actions, signed release/certificate continuity and device installation remain unverified. The existing private signing key was not accessed or changed.
+
+
+## 2026-11-24 — StudyForge 2.1.20 implementation
+
+- Started from the 2.1.19 self-contained source ZIP. Preserved original `StudyForge_Plan.txt`, existing app identity and signing contract.
+- Added independent source-title/source-reference and created/modified date-range filters. Date boundaries are inclusive and use local `yyyy-MM-dd` calendar dates. Saved presets and JSON backups retain all six new criteria fields.
+- Added additive Room migration 13→14 for source filters and 14→15 for four date boundaries; existing presets receive empty defaults.
+- Added core-field change summaries in question version history. This is not a line-level diff or full audit attribution.
+- Added question-type accuracy analytics based on scored review logs; unscored logs are excluded and deleted-question logs remain visible in their own category.
+- Added filter, preset, question-type analytics tests plus SQLite migration and static backup/release verification scripts.
+- Advanced app to 2.1.20/versionCode 24, Room schema 15 and JSON schema 15; updated workflow artifact names and validation steps.
+- Android Gradle compilation/JUnit, Room runtime, full backup round-trip, CI, signing/certificate continuity and device acceptance have not been performed.
+
+
+## 2026-11-24 — StudyForge 2.1.22 first-review Learning correction
+
+- Started from the uploaded `StudyForge-v2.1.21-self-contained-handoff.zip`; read the complete handoff and inspected the current project plan, original blueprint, implementation matrix, roadmap, build records, Kotlin source, Room entities/DAO/migrations, tests, backup import/export, manifest and GitHub Actions workflow.
+- Confirmed app 2.1.21/versionCode 25, Room schema 15, JSON backup schema 15, registered migrations 1→2 through 14→15, and backup imports 1–15. Confirmed the ZIP contains no Gradle wrapper and this environment has no Gradle executable.
+- Source audit found a first-review state-transition gap: Good on a new card bypassed the configured next Learning step, and Hard on a new card graduated directly to Review. Corrected Good to advance to step 1 when a second step exists and Hard to enter Learning at step 0. Easy and final Good still graduate.
+- Preserved the explicit StudyForge policy that Hard repeats the current step; this release does not claim full upstream scheduler-policy parity. Upstream state-transition documentation was consulted for New/Learning Good and Hard behavior.
+- Added JUnit test source for the new Good and Hard transitions. A standalone `kotlinc` harness compiled the scheduler core with Android Room wiring excluded and passed four assertions (new Good, new Hard, new Easy, one-step Good graduation). Android JUnit has not been run.
+- Advanced app metadata to 2.1.22/versionCode 26 and updated workflow artifact labels. Room and JSON backup remain schema 15; no migration or backup-format change.
+- Corrected stale current-version metadata in `PROJECT_PLAN.md` and the audit basis in `IMPLEMENTATION_STATUS.md`; updated release records and handoff. Original `StudyForge_Plan.txt` was not modified.
+- Local Python checks passed for migrations 7→8 through 14→15, schema-15 backup export/import static checks and the 2.1.22 source consistency check. No Gradle build, Android JUnit, Room runtime, app backup/restore round-trip, GitHub Actions, signing verification or device test was performed. Existing private signing key and credentials were not accessed or changed.
+
+
+## 2.1.23 — learner-revealed hint blocks
+
+- Added `HINT` as a supported structured content-block kind. Authors can add, edit, reorder and delete hint blocks in the question editor; existing content-block storage, question snapshots and JSON backup paths are reused.
+- During study, hint content is hidden behind a **Reveal hint** action and is displayed only after the learner chooses to reveal it. Hint reveal state is scoped to the current question in the active screen; it is not persisted as a review event.
+- No Room migration or JSON backup schema change: both remain version 15. Existing backups and unknown/older block kinds retain their prior behavior.
+- Added static release consistency checks and updated GitHub Actions artifact labels to 2.1.23.
+- Verification in this package: Python source-consistency and migration/backup smoke scripts are run locally and recorded in `BUILD_STATUS.md`. Android Gradle/JUnit, Room runtime, CI, signing and device acceptance are not claimed unless separately evidenced.
+
+
+## 2.1.24 — FSRS-6 reference-equation correction
+
+- Corrected long-term review transitions to calculate new stability from the pre-review difficulty, then calculate the updated difficulty separately from that same prior state, matching the py-fsrs FSRS-6 update order.
+- Corrected the FSRS memory-state lower bound from 0.1 to 0.001 in stability/retrievability/interval calculations, consistent with the upstream FSRS-6 reference implementation.
+- Added four-rating long-term reference-equation regression fixtures for Again, Hard, Good and Easy (S=10, D=5, elapsed=5 study days, desired retention 0.90, default 21 weights), plus a lower-bound case. Fixtures follow py-fsrs v6.0.0 equations; this does not certify full scheduler/API parity or StudyForge's distinct learning-step policy.
+- App version 2.1.24 / versionCode 28. Room schema 15 and JSON backup schema 15 remain unchanged; migrations 1→2 through 14→15 and backup imports 1–15 are retained.
+- Existing HINT blocks and all previously implemented features remain in source. Original `StudyForge_Plan.txt` and signing identity are preserved.
+- Android Gradle/JUnit, Room runtime, app backup/restore, GitHub Actions, signed APK and physical-device verification are not claimed without external evidence.
+
+- Local checks executed: release consistency verifier passed; migration smoke/static checks 7→8, 8→9, 9→10, 10→11, 11→12, 12→13, 13→14 and 14→15 passed; schema-15 backup static check passed. Standalone Kotlin harness compiled the exact scheduler core (excluding Room transaction wiring) and matched all four rating outputs to 1e-9.
+- No Gradle executable or Gradle wrapper is available in this environment; Android JUnit/build, Room runtime, backup round-trip, CI, signed APK and device checks were not run.
+
+
+## 2.1.24 continued verification — initial-state coverage and plan audit
+
+- Re-opened the complete 2.1.24 source package and handoff; confirmed version 2.1.24/versionCode 28, Room schema 15, backup schema 15, and the outstanding V1/V2 acceptance gates.
+- Added four initial-state FSRS-6 equation assertions covering stability and difficulty for Again, Hard, Good and Easy using the published default 21 weights. Existing four-rating long-term equation fixtures remain.
+- Added `SOURCE_PLAN_AUDIT_2.1.24.md`; explicitly distinguishes equation-derived fixtures from a true upstream-generated golden-vector corpus. Full upstream parity remains outstanding.
+- Passed `verify_release_2_1_24.py`, migration/static checks 7→8 through 14→15, and schema-15 backup static checks. Standalone Kotlin scheduler-core harness passed four initial-state plus four long-term assertions.
+- No Android Gradle/JUnit, Room runtime, app backup/restore, GitHub Actions, signing, or device verification was performed. No APK was built; versionCode remains 28. Existing signing identity was not accessed or changed.
+
+## 2026-11-25 — V2 Room runtime verification added
+
+Added `StudyDatabaseRuntimeTest` under `app/src/androidTest`. It opens the actual generated Room database on Android SQLite, persists representative records from the current schema, closes/reopens the database and checks persistence. A second test checks foreign-key cascade behavior when a question is deleted. AndroidX instrumentation dependencies were added, and GitHub Actions now invokes `:app:connectedDebugAndroidTest` on an API 35 emulator before building the APK.
+
+No runtime result is claimed yet: the emulator job must run in GitHub Actions. These tests do not yet construct every historical schema version or prove migrations 1→15 with populated records; nor do they execute the app's complete JSON export/import flow.
+
+## 2026-11-25 additional structured-editor validation
+
+- Table blocks are now validated before save: at least one row, at most 30 rows, and at most 8 columns per row.
+- Graph blocks are now validated before save: at least two data rows, at most 200 rows, and every nonblank row must contain exactly two finite numeric values. This prevents malformed rows from being silently omitted from the saved graph preview.
+- Added unit-test source for valid and invalid table/graph content and editor save validation. These JUnit tests have not run locally because Gradle is unavailable.
+
+
+
+## 2026-11-25 continuation — collection cleanup and Android lint gate
+
+- Added an Android Room instrumentation case for collection deletion. It verifies collection-question links are removed, saved-filter preset collection references become null through the Room `SET_NULL` foreign key, and study-session preset references are explicitly cleared using the same cleanup call as the collection-delete UI.
+- Added `:app:lintDebug` to GitHub Actions before unit and emulator tests so Compose/Android lint findings fail the workflow rather than being silently skipped.
+- Extended the static source-integrity verifier to require the new runtime test and lint workflow step.
+- These additions are source-only until GitHub Actions executes. No Android build, lint, unit-test or emulator result is claimed locally.
+
+
+## 2026-11-25 continuation — safe embedded-image backup import
+
+- The JSON backup importer previously accepted Base64 strings using a character-only regular expression and a loose 8,000,000-character truncation. That could preserve malformed Base64 or accept decoded image payloads larger than the editor's 1.5 MB limit.
+- Added `MediaImportRules.sanitizeBase64Image`, which rejects empty/malformed payloads, checks encoded length before decoding, enforces the same 1,500,000-byte decoded limit as the image picker, and returns canonical Base64 for valid data. The importer now uses this helper.
+- Added five JUnit regression cases for valid/canonical payloads, malformed data, empty data, decoded oversize and encoded-length oversize. Android JUnit remains unrun.
+- Added a CI static contract check `tools/verify_backup_media_import.py` and wired it into the existing workflow. A standalone `kotlinc` harness compiled the exact helper and passed five smoke assertions; all existing Python release, source-integrity, migration and schema-15 backup checks passed.
+- No app version, Room schema, JSON backup schema, migration, signing configuration or original blueprint change. Full Android backup/restore remains unverified.
+
+
+## 2026-11-25 continuation — review activity timeline
+
+- Added `ReviewTrendRules` to aggregate persisted review logs into a gap-filled 14-day local-calendar timeline with daily review totals, scored accuracy, active-day count and current streak. Unscored review logs count as activity but are excluded from accuracy. If there are no reviews today, a streak may continue from yesterday.
+- Added the 14-day activity card to Progress. It uses actual `reviewedAt` timestamps and recorded correctness only; no time-spent estimate is inferred.
+- Added five JUnit regression scenarios for gap filling, accuracy, streak behavior and timezone bucketing. A standalone `kotlinc` harness compiled the exact helper against the Room entity shape and passed 19 assertions. Android JUnit remains unrun.
+- No schema/version/backup changes.
+
+
+## 2026-11-25 continuation — FSRS difficulty mean-reversion correction
+
+- Further comparison with the upstream FSRS scheduler formula found that mean reversion must use the *unclamped* initial Easy difficulty as its target, then clamp the final updated difficulty to 1–10. StudyForge had been clamping the target to 1 before mean reversion. Corrected `ReviewScheduler.nextDifficulty` and updated the four long-term rating fixtures; long-term stability values remain unchanged because the stability update uses pre-review difficulty.
+- The correction follows the reference scheduler's `_next_difficulty` formula. A standalone Kotlin harness compiled the scheduler core and reproduced the updated four-rating values.
+- A separate attempt to reproduce py-fsrs v6.0.0 `test_memo_state` (Again, Good×5, then same-time Good; elapsed-day inputs 0, 0, 1, 3, 8, 21; 1m/10m learning steps) did **not** match the upstream expected final state: StudyForge produced S=53.6269, D=6.3464 versus the upstream test's S=49.4472, D=6.8271. This is an explicit unresolved conformance gap, not a passing golden-vector test. No further scheduler policy change was made without a complete diagnosis.
+- No version, Room schema, JSON schema or migration change. Full upstream fixture-by-fixture parity remains blocked.
+
+
+## 2026-11-25 continuation — dashboard version label
+
+- Corrected the Home dashboard's hard-coded release label from 2.1.18 to the actual source version 2.1.24. Extended the static integrity verifier to prevent the label from becoming stale again.
+- No behavior, data schema, versionCode or release signing changes.
+
+
+## 2026-11-25 — StudyForge 2.1.24 source-vs-plan audit and FSRS reproduction (no release)
+
+- Reopened the uploaded ZIP and checked all requested project documents, current source modules, Gradle/manifest/workflow, Room schema/migrations, backup paths and test sources. Confirmed 2.1.24/versionCode 28, Room 15, JSON backup 15/imports 1–15, migrations 1→2 through 14→15.
+- Found a stale current technical baseline in `PROJECT_PLAN.md` (schema 10 / migration through 9→10) and corrected it to schema 15 / migrations through 14→15. Extended the CI source-integrity script to enforce this. The original detailed blueprint remains unchanged.
+- Built a standalone Kotlin harness around the exact `ReviewScheduler` object and replayed the pinned py-fsrs v6.0.0 `test_memo_state` sequence. The final StudyForge state reproduces the known mismatch: S=53.626902917141386/D=6.34635796621067 versus upstream S=49.4472/D=6.8271.
+- Deliberately made no scheduler math change: intermediate state parity must be diagnosed first, with StudyForge's local-calendar-day and Hard-repeat-step product policies separated from upstream behavior.
+- Passed local static release/source-integrity/media-import/schema-15 backup checks and SQLite migration smoke checks 7→8 through 14→15. No Android/Gradle/JUnit, Room runtime, actual backup/restore, GitHub Actions, signing or device verification occurred.
+- No APK release or versionCode/schema change.
+
+
+## 2026-11-25 continuation — strict CSV/Anki quoted-field parsing
+
+- Hardened the shared CSV/TSV parser: a quote may only open a field at its beginning; after a closing quote only a delimiter, record separator or end-of-input is accepted. Malformed quote placement now produces a row-level import preview issue instead of being silently reinterpreted. RFC-style doubled quotes, quoted delimiters, quoted newlines and CRLF remain supported.
+- Added JUnit regression source for quotes inside unquoted fields, trailing characters after a closing quote, and valid quoted fields with CRLF. Existing CSV round-trip and Anki quoted-tab/newline cases remain in the suite.
+- Compiled the exact production parser with a lightweight entity stub using kotlinc and passed six standalone smoke assertions, including export/import round-trip and malformed-input rejection. Android JUnit remains unexecuted because Gradle/Android SDK are unavailable here.
+- No scheduler math, Room schema, JSON backup schema, migration, app version, versionCode, release signing or original blueprint changes.
+
+## 2026-11-25 continuation — consistent JSON backup snapshot
+
+- Changed JSON export to capture all 12 database-backed record groups (questions, collections, links, review logs, settings, saved filters, tags, content blocks, multipart parts, study-session presets, exam attempts and question versions) inside one Room transaction. JSON formatting and file writing happen after the transaction using the detached snapshot.
+- This prevents concurrent edits during export from producing a backup assembled from different database moments, such as a question from before an edit and its rich blocks or collection links from after it.
+- Added `tools/verify_backup_snapshot.py` and wired it into GitHub Actions and the current source-integrity gate. The static contract check passed locally. It does not replace Android runtime or real export/import testing.
+- No FSRS changes, version/versionCode bump, Room/backup schema change, migration, signing change or original blueprint edit.
+
+
+
+## 2026-11-25 continuation — bulk collection membership (FSRS excluded)
+
+- Added multi-select Library actions to add selected questions to, or remove them from, one chosen collection.
+- The operation revalidates the collection in the DB transaction, saves a pre-change question-version snapshot with the old collection IDs, updates link rows, and touches the question timestamp. Repeating an already-satisfied operation does not create a version.
+- Added `tools/verify_bulk_collection.py` and CI/source-integrity wiring. Static contract check and six standalone Kotlin assertions passed locally (stable ordering, duplicate prevention, no-op operations, whitespace and blank IDs); full Compose/Room runtime verification is still pending.
+- No FSRS source/tests were changed; no schema/version/signing/original-plan changes.
+
+## 2026-11-25 — live saved-filter counts (FSRS excluded)
+
+- Saved Library filter presets now show a live matching-question count beside each chip. Counts are recalculated from the current question list and current collection links, so question edits, tag/status/difficulty changes and collection membership changes are reflected without persisting stale count values.
+- Added a pure `QuestionLibraryFilter.countMatches` helper and JUnit source for current-data recalculation and deleted-collection references. Added `tools/verify_live_smart_filters.py` to GitHub Actions and the current source-integrity gate; its static contract check passes locally.
+- This is a live-count improvement to existing saved-filter presets, not a separate Room-backed dynamic-collection type or a background auto-refresh service. Applying a preset still applies its saved criteria to the current Library data.
+- No FSRS source/tests, app version/versionCode, Room schema, JSON backup schema, migration, signing identity or original blueprint were changed. Android JUnit/UI runtime remains untested.
+
+
+
+## 2026-11-25 — Library multi-select consistency (FSRS excluded)
+
+- Fixed bulk operations to resolve the selected ID set against all current Library questions, not only the currently filtered subset. This prevents the selected count from overstating the number of records modified after filters change. The “Select visible” control continues to select only visible results.
+- Added `QuestionSelectionRules` with regression test source for full-library resolution, Library ordering, stale IDs and empty selections. Added a static CI verifier and wired it into the source-integrity gate.
+- Static checks pass; Android JUnit/Compose runtime not run. FSRS source/tests unchanged. No app/Room/backup version or schema change.
+
+
+## 2026-11-25 — saved study-session preset editing (FSRS excluded)
+
+- Saved study-session rows now expose Edit. The dialog loads all persisted filter fields and current mode/topic; saving edits by stable preset ID, including when the user renames it. Save current resets the editor for a new preset.
+- Static verifier: `tools/verify_session_preset_edit.py`, wired into GitHub Actions and `verify_v2_source_integrity.py`.
+- Local static verification only; Android Compose/JUnit execution is not available in this environment. FSRS source/tests untouched; app/Room/backup versions, migrations, signing and original plan unchanged.
+
+
+## 2026-11-25 — rich-content Room persistence test coverage (FSRS excluded)
+
+Expanded `StudyDatabaseRuntimeTest` with a close/reopen persistence case covering ordered TEXT, HINT, IMAGE, TABLE and GRAPH blocks. The image fixture verifies embedded Base64, MIME type and alt text survive Room persistence. Updated `verify_v2_source_integrity.py` to require this case. The verifier passed locally. No Android instrumentation execution is claimed, and this is not a backup round-trip or historical migration test. App 2.1.24/versionCode 28, Room 15 and JSON backup 15 remain unchanged; FSRS and signing identity are untouched.
+
+## 2026-11-25 FSRS-6 conformance diagnosis — pinned-reference mismatch identified
+
+- Built and ran `tools/fsrs6_diagnostics/compare_py_fsrs_6_0_0.py`. It extracts and compiles the exact production `ReviewScheduler` object with minimal Room/entity stubs using `kotlinc`, then replays the pinned `py-fsrs` v6.0.0 `test_memo_state` fixture. In parallel, it runs a local reference port of the exact upstream implementation/defaults from commit `352c7a2`. No network or third-party Python package is required; `kotlinc` and a JRE are required.
+- The reference port reproduces the upstream golden result exactly: final S=49.4472374165 and D=6.8271057501 (rounded S=49.4472 / D=6.8271). The exact StudyForge Kotlin source returns S=53.6269029171 and D=6.3463579662.
+- Root cause confirmed: the comparison was mixing different default parameter vectors. Pinned py-fsrs v6.0.0 `fsrs/fsrs.py` has defaults `[0.2172, 1.1771, 3.2602, 16.1507, 7.0114, 0.57, 2.0966, 0.0069, 1.5261, 0.112, 1.0178, 1.849, 0.1133, 0.3127, 2.2934, 0.2191, 3.0004, 0.7536, 0.3332, 0.1437, 0.2]`; StudyForge currently uses `[0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.001, 1.8722, 0.1666, 0.796, 1.4835, 0.0614, 0.2629, 1.6483, 0.6014, 1.8729, 0.5425, 0.0912, 0.0658, 0.1542]`. The vectors differ in all 21 positions. The first mismatch is already visible on the initial Again: upstream S/D=0.2172/7.0114; StudyForge=0.212/6.4133.
+- Two additional pinned-v6.0.0 behavioral differences were found: (1) upstream v6.0.0 clamps initial Easy difficulty before using it as the mean-reversion target; StudyForge currently passes `clamp=false`; (2) upstream v6.0.0 short-term stability increase is clamped to >=1 for Good/Easy, not Hard, while StudyForge clamps every grade >= Hard. The Hard difference does not cause the `test_memo_state` fixture failure because that fixture contains no Hard ratings.
+- This corrects an earlier investigation note that relied on the newer `main/fsrs/scheduler.py` formula and treated its unclamped mean-reversion target as the pinned v6.0.0 contract. The actual pinned commit's source is `fsrs/fsrs.py`, and its behavior is different. Do not use current-main source as a substitute for the pinned reference.
+- No production FSRS code was changed. This task was diagnosis only. Before changing production, decide explicitly whether StudyForge's compatibility target is the exact py-fsrs v6.0.0 defaults/behavior or a newer FSRS-6 parameter baseline. If the target remains pinned v6.0.0, the defaults and the two behavioral differences above must be reconciled and regression-tested together.
+- Source references: pinned upstream implementation `https://raw.githubusercontent.com/open-spaced-repetition/py-fsrs/352c7a2/fsrs/fsrs.py`; pinned fixture `https://raw.githubusercontent.com/open-spaced-repetition/py-fsrs/352c7a2/tests/test_basic.py`. Local diagnostic output was reproduced successfully on 2026-11-25. This is a standalone source harness, not Android Gradle/JUnit or emulator verification.
+
+## 2026-11-25 — FSRS-6 pinned v6.0.0 compatibility correction
+
+- Corrected `ReviewScheduler.kt` to match the exact `py-fsrs` v6.0.0 reference at commit `352c7a2838071447fb1c55d9fbbbc04fa637ee81`: all 21 default weights, clamped initial-Easy mean-reversion target, and the same-day stability floor for Good/Easy only (not Hard).
+- Corrected learning/relearning Hard scheduling: step 0 keeps its position and uses the midpoint of the first two configured steps, or 1.5 times the only step; later steps repeat their configured delay.
+- Corrected elapsed-day calculation to match Python `timedelta.days` (completed 24-hour periods, not local calendar-day boundaries) and interval rounding to ties-to-even.
+- Added exact behavior for empty learning/relearning step lists: no learning steps means new cards graduate directly to Review; no relearning steps means a lapse remains in Review.
+- Updated initial-state, same-day, long-term, learning/relearning, empty-step, and pinned `test_memo_state` regression fixtures. The diagnostic compiles the actual scheduler and checks every transition plus focused Hard/elapsed-time policy probes.
+- Local results: pinned fixture matches at every transition; final StudyForge state S=49.447237416 / D=6.827105750 (rounded S=49.4472 / D=6.8271). A lightweight Kotlin/JUnit-compatible runner compiled and executed 32 scheduler regression tests: 32 passed, 0 failed. The standalone diagnostic also passed all four focused policy probes.
+- Verification boundary: this environment has `kotlinc` and Java but no Gradle executable or Gradle wrapper in the ZIP. Android Gradle/JUnit/Room/emulator execution and GitHub Actions remain unverified. No APK/release was produced; app version 2.1.24/versionCode 28, Room 15 and JSON backup 15 remain unchanged. `StudyForge_Plan.txt` was not modified.
+
+Reference implementation: `https://github.com/open-spaced-repetition/py-fsrs/blob/352c7a2/fsrs/fsrs.py`. Reference fixture: `https://github.com/open-spaced-repetition/py-fsrs/blob/352c7a2/tests/test_basic.py` (`test_memo_state`).
+
+---
+
+
+## 2026-11-25 — FSRS-6 pinned v6.0.0 compatibility correction
+
+- Corrected `ReviewScheduler.kt` to match the exact `py-fsrs` v6.0.0 reference at commit `352c7a2838071447fb1c55d9fbbbc04fa637ee81`: all 21 default weights, clamped initial-Easy mean-reversion target, and the same-day stability floor for Good/Easy only (not Hard).
+- Corrected learning/relearning Hard scheduling: step 0 keeps its position and uses the midpoint of the first two configured steps, or 1.5 times the only step; later steps repeat their configured delay.
+- Corrected elapsed-day calculation to match Python `timedelta.days` (completed 24-hour periods, not local calendar-day boundaries) and interval rounding to ties-to-even.
+- Added exact behavior for empty learning/relearning step lists: no learning steps means new cards graduate directly to Review; no relearning steps means a lapse remains in Review.
+- Updated initial-state, same-day, long-term, learning/relearning, empty-step, and pinned `test_memo_state` regression fixtures. The diagnostic compiles the actual scheduler and checks every transition plus focused Hard/elapsed-time policy probes.
+- Local results: pinned fixture matches at every transition; final StudyForge state S=49.447237416 / D=6.827105750 (rounded S=49.4472 / D=6.8271). A lightweight Kotlin/JUnit-compatible runner compiled and executed 32 scheduler regression tests: 32 passed, 0 failed. The standalone diagnostic also passed all four focused policy probes.
+- Verification boundary: this environment has `kotlinc` and Java but no Gradle executable or Gradle wrapper in the ZIP. Android Gradle/JUnit/Room/emulator execution and GitHub Actions remain unverified. No APK/release was produced; app version 2.1.24/versionCode 28, Room 15 and JSON backup 15 remain unchanged. `StudyForge_Plan.txt` was not modified.
+
+Reference implementation: `https://github.com/open-spaced-repetition/py-fsrs/blob/352c7a2/fsrs/fsrs.py`. Reference fixture: `https://github.com/open-spaced-repetition/py-fsrs/blob/352c7a2/tests/test_basic.py` (`test_memo_state`).
+
+---
+

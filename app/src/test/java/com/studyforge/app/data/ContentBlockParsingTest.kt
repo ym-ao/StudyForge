@@ -25,6 +25,18 @@ class ContentBlockParsingTest {
         assertEquals(listOf(1f to 2f, 4f to 5f), points)
     }
 
+    @Test fun tableValidationRejectsMoreThanEightColumnsAndTooManyRows() {
+        assertTrue(ContentBlockParsing.validateTable((1..9).joinToString("|") { "c$it" })!!.contains("8 columns"))
+        assertTrue(ContentBlockParsing.validateTable((1..31).joinToString("\n") { "$it|value" })!!.contains("30 rows"))
+    }
+
+    @Test fun graphValidationRequiresTwoFinitePairsAndRejectsMalformedRows() {
+        assertTrue(ContentBlockParsing.validateGraph("1,2")!!.contains("at least two"))
+        assertTrue(ContentBlockParsing.validateGraph("1,2\n3,no")!!.contains("finite numbers"))
+        assertTrue(ContentBlockParsing.validateGraph("1,2,3\n4,5")!!.contains("exactly two"))
+        assertEquals(null, ContentBlockParsing.validateGraph("1,2\n3;4\n5\t6"))
+    }
+
     @Test fun graphParserLimitsPointCount() {
         val source = (1..250).joinToString("\n") { "$it,${it * 2}" }
         assertEquals(200, ContentBlockParsing.graphPoints(source).size)

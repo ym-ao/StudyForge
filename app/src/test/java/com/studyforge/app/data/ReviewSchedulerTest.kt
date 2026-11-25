@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
-import java.time.ZoneOffset
 
 class ReviewSchedulerTest {
     private fun newQuestion(state: String = "New") = QuestionEntity(
@@ -17,18 +16,40 @@ class ReviewSchedulerTest {
     @Test
     fun newGoodCardUsesFsrsInitialStabilityAndDifficulty() {
         val result = ReviewScheduler.apply(newQuestion(), ReviewScheduler.GOOD, 1_000_000L)
-        assertEquals(2.3065, result.fsrsStability, 0.0001)
-        assertTrue(result.fsrsDifficulty in 1.0..10.0)
+        assertEquals(3.2602, result.fsrsStability, 0.0001)
+        assertEquals(4.884631634813845, result.fsrsDifficulty, 1e-9)
         assertEquals("Review", result.learningState)
-        assertEquals(2.0, result.intervalDays, 0.0001)
-        assertEquals(1_000_000L + 2L * 86_400_000L, result.dueAt)
+        assertEquals(3.0, result.intervalDays, 0.0001)
+        assertEquals(1_000_000L + 3L * 86_400_000L, result.dueAt)
+    }
+
+    @Test
+    fun newGoodAdvancesToSecondLearningStepWhenConfigured() {
+        val now = 1_000_000L
+        val settings = StudySettingsEntity(learningStepsMinutesCsv = "2,10")
+        val result = ReviewScheduler.apply(newQuestion(), ReviewScheduler.GOOD, now, settings)
+        assertEquals("Learning", result.learningState)
+        assertEquals(1, result.learningStepIndex)
+        assertEquals(10.0 / 1440.0, result.intervalDays, 0.000001)
+        assertEquals(now + 10L * 60L * 1000L, result.dueAt)
+    }
+
+    @Test
+    fun newHardStartsAtFirstLearningStepWhenConfigured() {
+        val now = 1_000_000L
+        val settings = StudySettingsEntity(learningStepsMinutesCsv = "2,10")
+        val result = ReviewScheduler.apply(newQuestion(), ReviewScheduler.HARD, now, settings)
+        assertEquals("Learning", result.learningState)
+        assertEquals(0, result.learningStepIndex)
+        assertEquals(6.0 / 1440.0, result.intervalDays, 0.000001)
+        assertEquals(now + 6L * 60L * 1000L, result.dueAt)
     }
 
     @Test
     fun newEasyCardStartsWithHigherStabilityThanGood() {
         val good = ReviewScheduler.apply(newQuestion(), ReviewScheduler.GOOD, 1_000_000L)
         val easy = ReviewScheduler.apply(newQuestion(), ReviewScheduler.EASY, 1_000_000L)
-        assertEquals(8.2956, easy.fsrsStability, 0.0001)
+        assertEquals(16.1507, easy.fsrsStability, 0.0001)
         assertTrue(easy.fsrsStability > good.fsrsStability)
         assertTrue(easy.fsrsDifficulty < good.fsrsDifficulty)
     }
@@ -66,13 +87,13 @@ class ReviewSchedulerTest {
     }
 
     @Test
-    fun hardRepeatsCurrentLearningStepAndAgainRestartsIt() {
+    fun hardKeepsLearningStepAndUsesUpstreamInitialStepMidpointThenAgainRestartsIt() {
         val settings = StudySettingsEntity(learningStepsMinutesCsv = "2,10")
         val first = ReviewScheduler.apply(newQuestion(), ReviewScheduler.AGAIN, 1_000_000L, settings)
         val hard = ReviewScheduler.apply(first, ReviewScheduler.HARD, first.dueAt!!, settings)
         assertEquals(0, hard.learningStepIndex)
         assertEquals("Learning", hard.learningState)
-        assertEquals(hard.lastReviewedAt!! + 2L * 60L * 1000L, hard.dueAt)
+        assertEquals(hard.lastReviewedAt!! + 6L * 60L * 1000L, hard.dueAt)
 
         val advanced = ReviewScheduler.apply(hard, ReviewScheduler.GOOD, hard.dueAt!!, settings)
         assertEquals(1, advanced.learningStepIndex)
@@ -80,6 +101,52 @@ class ReviewSchedulerTest {
         assertEquals(0, restarted.learningStepIndex)
         assertEquals("Learning", restarted.learningState)
         assertEquals(2.0 / 1440.0, restarted.intervalDays, 0.000001)
+    }
+
+    @Test
+    fun easyGraduatesImmediatelyFromLearningAndRelearning() {
+        val learningSettings = StudySettingsEntity(learningStepsMinutesCsv = "2,10")
+        val newAgain = ReviewScheduler.apply(newQuestion(), ReviewScheduler.AGAIN, 1_000_000L, learningSettings)
+        val learningEasy = ReviewScheduler.apply(newAgain, ReviewScheduler.EASY, newAgain.dueAt!!, learningSettings)
+        assertEquals("Review", learningEasy.learningState)
+        assertEquals(-1, learningEasy.learningStepIndex)
+        assertTrue(learningEasy.intervalDays >= 1.0)
+
+        val reviewCard = newQuestion("Review").copy(
+            fsrsStability = 12.0, fsrsDifficulty = 5.0, intervalDays = 12.0,
+            reviewCount = 4, lastReviewedAt = 900_000L
+        )
+        val lapse = ReviewScheduler.apply(reviewCard, ReviewScheduler.AGAIN, 1_000_000L,
+            StudySettingsEntity(relearningStepsMinutesCsv = "5,20"))
+        val relearningEasy = ReviewScheduler.apply(lapse, ReviewScheduler.EASY, lapse.dueAt!!,
+            StudySettingsEntity(relearningStepsMinutesCsv = "5,20"))
+        assertEquals("Review", relearningEasy.learningState)
+        assertEquals(-1, relearningEasy.learningStepIndex)
+        assertTrue(relearningEasy.intervalDays >= 1.0)
+    }
+
+    @Test
+    fun hardOnSingleLearningStepUsesOneAndAHalfTimesTheStep() {
+        val settings = StudySettingsEntity(learningStepsMinutesCsv = "2")
+        val first = ReviewScheduler.apply(newQuestion(), ReviewScheduler.AGAIN, 1_000_000L, settings)
+        val hard = ReviewScheduler.apply(first, ReviewScheduler.HARD, first.dueAt!!, settings)
+        assertEquals(0, hard.learningStepIndex)
+        assertEquals(3.0 / 1440.0, hard.intervalDays, 1e-9)
+        assertEquals(hard.lastReviewedAt!! + 3L * 60L * 1000L, hard.dueAt)
+    }
+
+    @Test
+    fun relearningHardUsesUpstreamSingleStepMultiplier() {
+        val settings = StudySettingsEntity(relearningStepsMinutesCsv = "10")
+        val reviewCard = newQuestion("Review").copy(
+            fsrsStability = 12.0, fsrsDifficulty = 5.0, intervalDays = 12.0,
+            reviewCount = 4, lastReviewedAt = 900_000L
+        )
+        val lapse = ReviewScheduler.apply(reviewCard, ReviewScheduler.AGAIN, 1_000_000L, settings)
+        val hard = ReviewScheduler.apply(lapse, ReviewScheduler.HARD, lapse.dueAt!!, settings)
+        assertEquals("Relearning", hard.learningState)
+        assertEquals(0, hard.learningStepIndex)
+        assertEquals(15.0 / 1440.0, hard.intervalDays, 1e-9)
     }
 
     @Test
@@ -104,6 +171,28 @@ class ReviewSchedulerTest {
         val graduated = ReviewScheduler.apply(second, ReviewScheduler.GOOD, second.dueAt!!, settings)
         assertEquals("Review", graduated.learningState)
         assertEquals(-1, graduated.learningStepIndex)
+    }
+
+    @Test
+    fun emptyLearningStepsGraduateNewCardsDirectlyToReview() {
+        val settings = StudySettingsEntity(learningStepsMinutesCsv = "", relearningStepsMinutesCsv = "10")
+        val again = ReviewScheduler.apply(newQuestion(), ReviewScheduler.AGAIN, 1_000_000L, settings)
+        assertEquals("Review", again.learningState)
+        assertEquals(-1, again.learningStepIndex)
+        assertTrue(again.intervalDays >= 1.0)
+    }
+
+    @Test
+    fun emptyRelearningStepsKeepLapsedCardsInReview() {
+        val settings = StudySettingsEntity(learningStepsMinutesCsv = "10", relearningStepsMinutesCsv = "")
+        val reviewCard = newQuestion("Review").copy(
+            fsrsStability = 12.0, fsrsDifficulty = 5.0, intervalDays = 12.0,
+            reviewCount = 4, lastReviewedAt = 900_000L
+        )
+        val again = ReviewScheduler.apply(reviewCard, ReviewScheduler.AGAIN, 1_000_000L, settings)
+        assertEquals("Review", again.learningState)
+        assertEquals(-1, again.learningStepIndex)
+        assertTrue(again.intervalDays >= 1.0)
     }
 
     @Test
@@ -139,13 +228,13 @@ class ReviewSchedulerTest {
     }
 
     @Test
-    fun fsrs6UsesWholeLocalStudyDaysRatherThanFractionalElapsedHours() {
-        val sameDayStart = Instant.parse("2026-01-01T08:00:00Z").toEpochMilli()
-        val sameDayEnd = Instant.parse("2026-01-01T23:50:00Z").toEpochMilli()
-        val nextDay = Instant.parse("2026-01-02T00:05:00Z").toEpochMilli()
-        assertEquals(0.0, ReviewScheduler.elapsedStudyDays(sameDayStart, sameDayEnd, ZoneOffset.UTC), 0.0)
-        assertEquals(1.0, ReviewScheduler.elapsedStudyDays(sameDayEnd, nextDay, ZoneOffset.UTC), 0.0)
-        assertEquals(0.0, ReviewScheduler.elapsedStudyDays(nextDay, sameDayEnd, ZoneOffset.UTC), 0.0)
+    fun fsrs6UsesCompletedTwentyFourHourPeriodsNotCalendarMidnights() {
+        val start = Instant.parse("2026-01-01T08:00:00Z").toEpochMilli()
+        val beforeTwentyFourHoursAcrossMidnight = Instant.parse("2026-01-02T00:05:00Z").toEpochMilli()
+        val exactlyTwentyFourHours = Instant.parse("2026-01-02T08:00:00Z").toEpochMilli()
+        assertEquals(0.0, ReviewScheduler.elapsedStudyDays(start, beforeTwentyFourHoursAcrossMidnight), 0.0)
+        assertEquals(1.0, ReviewScheduler.elapsedStudyDays(start, exactlyTwentyFourHours), 0.0)
+        assertEquals(0.0, ReviewScheduler.elapsedStudyDays(exactlyTwentyFourHours, start), 0.0)
     }
 
     @Test

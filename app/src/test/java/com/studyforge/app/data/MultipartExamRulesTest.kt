@@ -51,6 +51,25 @@ class MultipartExamRulesTest {
         assertTrue(MultipartExamRules.isCorrect(p, "Powerhouse of the cell"))
     }
 
+    @Test fun manualPartialCreditOverridesAutomaticScore() {
+        val parts = listOf(part("a", "mitochondria", 4.0), part("b", "ATP", 2.0))
+        val score = MultipartExamRules.score(parts, mapOf("a" to "wrong", "b" to "ATP"), mapOf("a" to 2.5))
+        assertEquals(4.5, score.earned, 0.0001)
+        assertEquals(6.0, score.possible, 0.0001)
+    }
+
+    @Test fun manualAwardIsClampedToPartMaximumAndZeroMinimum() {
+        val p = part("a", "x", 3.0)
+        assertEquals(3.0, MultipartExamRules.earnedPoints(p, "wrong", 9.0), 0.0001)
+        assertEquals(0.0, MultipartExamRules.earnedPoints(p, "x", -2.0), 0.0001)
+    }
+
+    @Test fun invalidManualAwardFallsBackToAutomaticMarking() {
+        val p = part("a", "x", 2.0)
+        assertEquals(2.0, MultipartExamRules.earnedPoints(p, "x", Double.NaN), 0.0001)
+        assertEquals(0.0, MultipartExamRules.earnedPoints(p, "wrong", Double.POSITIVE_INFINITY), 0.0001)
+    }
+
     @Test fun invalidPointPartsAreExcludedFromTotal() {
         val score = MultipartExamRules.score(listOf(part("a", "x", 2.0), part("b", "y", -1.0)), mapOf("a" to "x", "b" to "y"))
         assertEquals(2.0, score.possible, 0.0001)

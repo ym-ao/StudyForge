@@ -1,12 +1,12 @@
 # StudyForge — Master Project Plan
 
-**Current source version:** 2.1.13  
-**Android versionCode:** 17  
+**Current source version:** 2.1.24  
+**Android versionCode:** 28  
 **Plan status:** Living plan; original blueprint preserved in `StudyForge_Plan.txt`  
 **Platform:** Android (Kotlin + Jetpack Compose)  
 **Working style:** Develop in staged releases, with each ZIP containing the source and updated project records.
 
-> **Important status correction:** Earlier audit notes describe the 2.1.0 baseline and are retained as history. The current source package is 2.1.13 (versionCode 18, Room schema 9, JSON backup schema 9). The 2.1.11 source adds full saved-session criteria, stepwise DERIVATION blocks, multipart accepted-answer/numeric tolerance grading, broader recorded-data analytics, and FSRS-6 equation-invariant tests. Manual within-part partial credit, persisted whole-exam attempts, complete upstream FSRS vectors, Room runtime/backup round-trip, CI and device verification remain open. The original planning file said that no implementation had started; that statement described the planning baseline and is now historical. The 2.1.2–2.1.10 sources advance unfinished Version 1 and Version 2 features. The 2.1.4 source adds persisted multi-step learning/relearning progression; 2.1.5 adds reusable library-filter presets; 2.1.6 adds tag management. These source features are not yet verified as a successful APK build or device installation. See `IMPLEMENTATION_STATUS.md` and `BUILD_STATUS.md` for source status versus evidence.
+> **Current source status:** StudyForge 2.1.24 / versionCode 28, Room schema 15, JSON backup schema 15. Adds FSRS-6 pinned py-fsrs v6.0.0 compatibility corrections and regression fixtures, retaining the 2.1.23 HINT blocks and earlier V1/V2 features. Android build, CI, signed-APK and device verification remain pending. Original `StudyForge_Plan.txt` remains authoritative and unchanged; V1/V2 remain open until all blueprint requirements and verification gates pass.
 
 ## Product vision
 
@@ -42,7 +42,7 @@ First useful offline-first release:
 - Basic review history.
 - GitHub Actions APK building.
 
-The first useful APK should be genuinely usable for study, not an empty prototype. The architecture should prepare for later releases without prematurely introducing AI/cloud dependencies. The 2.1.2 source added native offline LaTeX renderer integration and Markdown-like content previews. The 2.1.3 source adds exam/difficulty metadata, formatting shortcuts across question/answer/explanation fields, performance/exam/difficulty filters, and exam question navigation. The 2.1.5 source adds named saved library-filter presets with persistence and backup support. The 2.1.6 source adds a dedicated tag manager and normalized tag catalogue while retaining the legacy question tag strings. The full structured block editor (including media, tables, and graphs) remains incomplete.
+The first useful APK should be genuinely usable for study, not an empty prototype. The architecture should prepare for later releases without prematurely introducing AI/cloud dependencies. The 2.1.2 source added native offline LaTeX renderer integration and Markdown-like content previews. The 2.1.3 source adds exam/difficulty metadata, formatting shortcuts across question/answer/explanation fields, performance/exam/difficulty filters, and exam question navigation. The 2.1.5 source adds named saved library-filter presets with persistence and backup support. The 2.1.6 source adds a dedicated tag manager and normalized tag catalogue while retaining the legacy question tag strings. Structured TEXT/HEADING/LIST/LATEX/IMAGE/TABLE/GRAPH/DERIVATION blocks, offline image embedding, and selection-aware formatting are now source-implemented; advanced block-specific authoring and end-to-end runtime verification remain open.
 
 ### Version 2.0 — Learning engine
 
@@ -53,7 +53,7 @@ The first useful APK should be genuinely usable for study, not an empty prototyp
 - Weak-topic analytics.
 - Custom review settings.
 
-The 2.1.2 source adds an FSRS-6 scheduler, persisted review/exam settings, additional study modes, configurable MCQ exams, and expanded analytics. The 2.1.3 source adds timed-exam question navigation and difficulty-based result breakdown. The 2.1.4 source adds ordered multi-step learning/relearning progression with saved step position; 2.1.5 adds saved library-filter presets; 2.1.6 adds tag management and a normalized catalogue. Version 2 remains open until CI/regression and real-device acceptance checks pass, and custom sessions, richer exam types/partial credit, and advanced analytics are complete.
+The 2.1.2 source adds an FSRS-6 scheduler, persisted review/exam settings, additional study modes, configurable MCQ exams, and expanded analytics. The 2.1.3 source adds timed-exam question navigation and difficulty-based result breakdown. The 2.1.4 source adds ordered multi-step learning/relearning progression with saved step position; 2.1.5 adds saved library-filter presets; 2.1.6 adds tag management and a normalized catalogue. Version 2 remains open until CI/regression and real-device acceptance checks pass, and remaining advanced analytics/custom learning variants are complete.
 
 ### Version 3.0 — Advanced question engine
 
@@ -100,19 +100,18 @@ Use semantic versioning within the major release, for example:
 - `1.2.0` — further improvements.
 - `2.0.0` — major learning-engine milestone.
 
-The current source version is `2.1.10` with `versionCode = 15`. Version 2.1.7 added schema-8 persistence and JSON backup foundations for structured content blocks, multipart question parts, and saved study-session presets. Version 2.1.8 adds user-facing text/heading/list/LaTeX block authoring and study-card rendering, multipart part authoring (not partial-credit grading), and basic saved-session save/apply/delete UI. Version 2.1.9 adds image selection with embedded offline rendering, plus table and numeric graph content blocks using the existing schema-8 media fields and backup serialization. Multipart timed exam presentation and weighted all-or-nothing per-part scoring are now implemented in source; advanced within-part partial credit, full session criteria editing, structured derivations, and richer table/graph authoring remain outstanding. It retains the 2.1.6 tag manager, 2.1.5 saved filters, 2.1.4 ordered multi-step Learning/Relearning progression, 2.1.3 question metadata/filters/exam navigation, FSRS-6 scheduler, persisted study settings/modes, LaTeX renderer integration, and fixed signing workflow. Room is schema 8 and JSON backup schema is 8. The release remains a source candidate until CI, migration, backup, and device checks pass. Do not reuse a version code. Increment it for every APK release. Do not mark Version 1 or Version 2 finished while important approved requirements remain incomplete.
+The historical paragraph below describes the 2.1.10 source snapshot, not the current source. Version 2.1.7 added schema-8 persistence and JSON backup foundations for structured content blocks, multipart question parts, and saved study-session presets. Version 2.1.8 adds user-facing text/heading/list/LaTeX block authoring and study-card rendering, multipart part authoring (not partial-credit grading), and basic saved-session save/apply/delete UI. Version 2.1.9 adds image selection with embedded offline rendering, plus table and numeric graph content blocks using the existing schema-8 media fields and backup serialization. Multipart timed exam presentation and weighted all-or-nothing per-part scoring are now implemented in source; manual within-part partial credit was added in 2.1.14; persisted whole-exam attempts, full session criteria editing, structured derivations, and richer table/graph authoring remain outstanding. That historical source retained the 2.1.6 tag manager, 2.1.5 saved filters, 2.1.4 ordered multi-step Learning/Relearning progression, 2.1.3 question metadata/filters/exam navigation, FSRS-6 scheduler, persisted study settings/modes, LaTeX renderer integration, and fixed signing workflow. That historical 2.1.10 snapshot used Room schema 8 and JSON backup schema 8. The release remains a source candidate until CI, migration, backup, and device checks pass. Do not reuse a version code. Increment it for every APK release. Do not mark Version 1 or Version 2 finished while important approved requirements remain incomplete.
 
 ## Next recommended work
 
-The 2.1.2–2.1.10 sources advance several previously missing V1/V2 features, but they do not complete the entire approved scope. Before starting Version 3.0, continue with the remaining V1/V2 requirements:
+The current source implements most of the approved V1/V2 feature foundations, but acceptance and independent verification are not complete. Before starting Version 3.0:
 
-1. Extend the new structured editor with image/media selection and offline rendering, table and graph blocks, and selection-aware formatting.
-2. Complete structured derivation authoring/execution, full custom-session criteria editing, multipart exam navigation/answer capture, and weighted partial-credit marking (basic block authoring, session presets, saved filters and tag management are now present in source).
-3. Validate the multi-step Learning/Relearning behavior against FSRS expectations, add review-recovery controls, and complete the remaining custom scheduler settings.
-4. Expand step-by-step work into structured derivation steps; implement any remaining custom/numerical/topic learning session variants.
-5. Expand the current MCQ question navigator into richer exam types, multi-part questions, partial credit, and deeper results.
-6. Add database migration, JSON round-trip, FSRS reference-vector, scheduling edge-case, and exam-flow tests.
-7. Verify GitHub Actions build, signed APK signature, installation/update, offline LaTeX, DB migration, and backup restore on the Android device.
+1. Validate FSRS-6 against official upstream golden vectors for initial states, same-day updates, review transitions and short-term sequences.
+2. Add and run Room runtime migration tests across the supported migration chain, preserving populated question, collection, review, content-block, multipart, preset and attempt records.
+3. Execute a real Android JSON export/import round-trip covering image bytes, content blocks, multipart grading metadata, settings, tags, collections, review history, saved presets and exam attempts.
+4. Finish richer table/graph and structured-content authoring where the original blueprint requires it; verify offline rendering on-device.
+5. Audit review-recovery controls and any remaining custom learning-session variants against the original blueprint.
+6. Run full Gradle/Compose/KSP/JUnit, GitHub Actions, signed APK certificate-continuity checks, and install/update/offline acceptance on the Android phone.
 
 Avoid scope creep: keep dynamic numerical templates for Version 3, AI/API workflows for Version 4, and cloud/multi-user expansion for Version 5 unless the user explicitly changes the roadmap.
 
@@ -124,9 +123,9 @@ Avoid scope creep: keep dynamic numerical templates for Version 3, AI/API workfl
 - Minimum SDK 26; compile SDK 36; target SDK 35.
 - Java 17 target.
 - Android Gradle Plugin 8.13.2; Gradle 8.13 in GitHub Actions.
-- Current Room database schema version 8; migrations `1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8` are in `StudyDatabase.kt`.
-- Backup JSON schema version 8; import accepts schema versions 1 through 8.
-- Current scheduler code is `ReviewScheduler.kt` and implements FSRS-6 with the published default parameter set; CI/reference-vector validation remains pending.
+- Current Room database schema version 15; additive migrations `1 -> 2` through `14 -> 15` are registered in `StudyDatabase.kt`.
+- Backup JSON schema version 15; import accepts schema versions 1 through 15.
+- Current scheduler code `ReviewScheduler.kt` matches the pinned py-fsrs v6.0.0 21-parameter vector and passes the pinned `test_memo_state` fixture in a standalone Kotlin harness. Full upstream-suite parity and Android Gradle/JUnit/device verification remain outstanding.
 - GitHub Actions workflow: `.github/workflows/android-apk.yml`.
 
 These values must be checked against the source before changing them. Database and backup schema changes require deliberate migration/backward-compatibility work.

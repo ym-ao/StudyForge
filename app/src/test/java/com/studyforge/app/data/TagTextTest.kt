@@ -16,6 +16,16 @@ class TagTextTest {
         assertEquals("Physics, MDCAT", TagText.rename("Physics, Chemistry, MDCAT", "Chemistry", "physics"))
     }
 
+    @Test fun addTrimsAndDeduplicatesCaseInsensitively() {
+        assertEquals("Physics, MDCAT", TagText.add("Physics", " mdcAT "))
+        assertEquals("Physics, MDCAT", TagText.add("Physics", " MDCAT "))
+    }
+
+    @Test fun addIgnoresBlankOrCommaDelimitedTagName() {
+        assertEquals("Physics", TagText.add(" Physics ", "  "))
+        assertEquals("Physics", TagText.add("Physics", "Math, Science"))
+    }
+
     @Test fun removeOnlyRemovesExactTag() {
         assertEquals("Formula 10, MDCAT", TagText.remove("Formula 1, Formula 10, MDCAT", "Formula 1"))
     }

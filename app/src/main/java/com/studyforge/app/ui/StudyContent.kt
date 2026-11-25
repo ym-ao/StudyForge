@@ -79,7 +79,7 @@ private fun appendStyledLine(builder: AnnotatedString.Builder, text: String, sty
 }
 
 private fun appendInlineMarkup(builder: AnnotatedString.Builder, text: String) {
-    val pattern = Regex("\\*\\*(.+?)\\*\\*|\\*(.+?)\\*|`(.+?)`")
+    val pattern = Regex("\\*\\*(.+?)\\*\\*|\\*(.+?)\\*|`(.+?)`|__(.+?)__|==(.+?)==")
     var cursor = 0
     for (match in pattern.findAll(text)) {
         if (match.range.first > cursor) builder.append(text.substring(cursor, match.range.first))
@@ -94,9 +94,19 @@ private fun appendInlineMarkup(builder: AnnotatedString.Builder, text: String) {
                 builder.append(match.groups[2]!!.value)
                 builder.pop()
             }
-            else -> {
+            match.groups[3] != null -> {
                 builder.pushStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = Color.LightGray.copy(alpha = 0.25f), textDecoration = TextDecoration.None))
                 builder.append(match.groups[3]!!.value)
+                builder.pop()
+            }
+            match.groups[4] != null -> {
+                builder.pushStyle(SpanStyle(textDecoration = TextDecoration.Underline))
+                builder.append(match.groups[4]!!.value)
+                builder.pop()
+            }
+            else -> {
+                builder.pushStyle(SpanStyle(background = Color.Yellow.copy(alpha = 0.35f)))
+                builder.append(match.groups[5]!!.value)
                 builder.pop()
             }
         }

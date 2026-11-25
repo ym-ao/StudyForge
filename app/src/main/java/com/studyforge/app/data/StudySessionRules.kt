@@ -3,8 +3,13 @@ package com.studyforge.app.data
 object StudySessionRules {
     val supportedModes = setOf("Due", "All", "Practice", "Random", "Ordered", "Topic", "Weakest", "Step-by-step", "Exam")
 
-    fun filterQuestions(questions: List<QuestionEntity>, preset: StudySessionPresetEntity): List<QuestionEntity> =
+    fun filterQuestions(
+        questions: List<QuestionEntity>,
+        preset: StudySessionPresetEntity,
+        collectionQuestionIds: Set<String>? = null
+    ): List<QuestionEntity> =
         questions.filter { question ->
+            (preset.collectionId.isBlank() || (collectionQuestionIds != null && question.id in collectionQuestionIds)) &&
             (preset.subject.isBlank() || question.subject.equals(preset.subject, true)) &&
             (preset.chapter.isBlank() || question.chapter.equals(preset.chapter, true)) &&
             (preset.topic.isBlank() || question.topic.equals(preset.topic, true)) &&

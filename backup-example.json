@@ -1,15 +1,39 @@
 {
   "app": "StudyForge",
-  "schemaVersion": 9,
+  "schemaVersion": 15,
   "exportedAt": 0,
-  "questions": [],
+  "questions": [
+    {
+      "id": "example-question",
+      "prompt": "Example prompt",
+      "answer": "Example answer",
+      "sourceTitle": "Example textbook",
+      "sourceDetail": "Chapter 1, page 2"
+    }
+  ],
   "collections": [],
   "links": [],
   "reviewLogs": [],
   "settings": {},
   "tags": [],
-  "savedFilterPresets": [],
+  "savedFilterPresets": [
+    {
+      "id": "example-filter",
+      "name": "Biology source review",
+      "query": "",
+      "type": "All",
+      "status": "All",
+      "sourceTitle": "Biology textbook",
+      "sourceDetail": "Chapter 4 page 82",
+      "createdAfter": "2026-01-01",
+      "createdBefore": "2026-10-31",
+      "updatedAfter": "2026-02-01",
+      "updatedBefore": "2026-11-01"
+    }
+  ],
   "contentBlocks": [],
   "questionParts": [],
-  "studySessionPresets": []
+  "studySessionPresets": [],
+  "examAttempts": [],
+  "questionVersions": []
 }

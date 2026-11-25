@@ -2,13 +2,9 @@ package com.studyforge.app.data
 
 import androidx.room.withTransaction
 import java.util.UUID
-import java.time.Instant
-import java.time.ZoneId
-import java.time.temporal.ChronoUnit
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.pow
-import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /** FSRS-6 scheduler using the published 21 default parameters. All calculations are local and deterministic. */
@@ -19,11 +15,13 @@ object ReviewScheduler {
     const val EASY = "Easy"
 
     private const val DAY_MS = 86_400_000.0
+    // Exact DEFAULT_PARAMETERS from open-spaced-repetition/py-fsrs v6.0.0
+    // commit 352c7a2838071447fb1c55d9fbbbc04fa637ee81.
     private val weights = doubleArrayOf(
-        0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194,
-        0.001, 1.8722, 0.1666, 0.796, 1.4835, 0.0614,
-        0.2629, 1.6483, 0.6014, 1.8729, 0.5425, 0.0912,
-        0.0658, 0.1542
+        0.2172, 1.1771, 3.2602, 16.1507, 7.0114, 0.57, 2.0966,
+        0.0069, 1.5261, 0.112, 1.0178, 1.849, 0.1133,
+        0.3127, 2.2934, 0.2191, 3.0004, 0.7536, 0.3332,
+        0.1437, 0.2
     )
 
     fun apply(
@@ -46,7 +44,7 @@ object ReviewScheduler {
         val wasInReview = priorState == "Review"
         val oldStability = when {
             question.fsrsStability > 0.0 -> question.fsrsStability
-            question.intervalDays > 0.0 -> question.intervalDays.coerceAtLeast(0.1)
+            question.intervalDays > 0.0 -> question.intervalDays.coerceAtLeast(0.001)
             else -> 0.0
         }
         val oldDifficulty = when {
@@ -61,61 +59,119 @@ object ReviewScheduler {
             stability = weights[grade - 1]
             difficulty = initialDifficulty(grade)
         } else {
-            val currentS = oldStability.coerceAtLeast(0.1)
+            val currentS = oldStability.coerceAtLeast(0.001)
             val currentD = oldDifficulty.coerceIn(1.0, 10.0)
             val elapsedDays = question.lastReviewedAt?.let { elapsedStudyDays(it, reviewedAt) } ?: 0.0
             val retrievability = retrievability(elapsedDays, currentS)
-            difficulty = nextDifficulty(currentD, grade)
+            // FSRS-6 computes the new stability from the pre-review difficulty.
+            // Difficulty is updated separately from that same prior state.
             stability = when {
                 elapsedDays < 1.0 -> nextShortTermStability(currentS, grade)
-                grade == 1 -> nextForgetStability(difficulty, currentS, retrievability)
-                else -> nextRecallStability(difficulty, currentS, retrievability, grade)
+                grade == 1 -> nextForgetStability(currentD, currentS, retrievability)
+                else -> nextRecallStability(currentD, currentS, retrievability, grade)
             }
+            difficulty = nextDifficulty(currentD, grade)
         }
 
-        val learningSteps = parseSteps(settings.learningStepsMinutesCsv).ifEmpty { listOf(10) }
-        val relearningSteps = parseSteps(settings.relearningStepsMinutesCsv).ifEmpty { listOf(10) }
+        // Empty configured step lists are meaningful in py-fsrs: learning can be
+        // disabled, and a lapse can remain in Review when relearning is disabled.
+        val learningSteps = parseSteps(settings.learningStepsMinutesCsv)
+        val relearningSteps = parseSteps(settings.relearningStepsMinutesCsv)
         var nextState = "Review"
         var nextStepIndex = -1
         var nextIntervalDays: Double
 
         when {
-            grade == 1 -> {
-                // A new card enters Learning; a graduated card enters Relearning.
-                // Repeated Again ratings restart the appropriate sequence at step zero.
-                val useRelearning = !isNew && !wasLearning && !wasRelearning
-                val steps = if (useRelearning || wasRelearning) relearningSteps else learningSteps
-                nextState = if (useRelearning || wasRelearning) "Relearning" else "Learning"
+            grade == 1 && isNew -> {
+                if (learningSteps.isEmpty()) {
+                    nextState = "Review"
+                    nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+                } else {
+                    nextState = "Learning"
+                    nextStepIndex = 0
+                    nextIntervalDays = learningSteps.first() / 1440.0
+                }
+            }
+            grade == 1 && wasLearning -> {
+                if (learningSteps.isEmpty()) {
+                    nextState = "Review"
+                    nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+                } else {
+                    nextState = "Learning"
+                    nextStepIndex = 0
+                    nextIntervalDays = learningSteps.first() / 1440.0
+                }
+            }
+            grade == 1 && wasRelearning -> {
+                if (relearningSteps.isEmpty()) {
+                    nextState = "Review"
+                    nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+                } else {
+                    nextState = "Relearning"
+                    nextStepIndex = 0
+                    nextIntervalDays = relearningSteps.first() / 1440.0
+                }
+            }
+            grade == 1 && wasInReview -> {
+                if (relearningSteps.isEmpty()) {
+                    // py-fsrs keeps the card in Review when no relearning steps are configured.
+                    nextState = "Review"
+                    nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+                } else {
+                    nextState = "Relearning"
+                    nextStepIndex = 0
+                    nextIntervalDays = relearningSteps.first() / 1440.0
+                }
+            }
+            isNew && learningSteps.isEmpty() -> {
+                nextState = "Review"
+                nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+            }
+            isNew && grade == 2 -> {
+                // py-fsrs v6.0.0 keeps step 0, but schedules the midpoint of the
+                // first two learning steps (or 1.5x when only one step exists).
+                nextState = "Learning"
                 nextStepIndex = 0
-                nextIntervalDays = steps.first() / 1440.0
+                nextIntervalDays = hardStepMinutes(learningSteps, 0) / 1440.0
+            }
+            isNew && grade == 3 && learningSteps.size > 1 -> {
+                // Good advances from the implicit first position to the next configured step.
+                nextState = "Learning"
+                nextStepIndex = 1
+                nextIntervalDays = learningSteps[1] / 1440.0
             }
             wasLearning || wasRelearning -> {
                 val steps = if (wasRelearning) relearningSteps else learningSteps
-                val currentIndex = question.learningStepIndex.coerceIn(0, steps.lastIndex)
-                when (grade) {
-                    2 -> {
-                        // Hard repeats the current step rather than silently skipping it.
-                        nextState = priorState
-                        nextStepIndex = currentIndex
-                        nextIntervalDays = steps[currentIndex] / 1440.0
-                    }
-                    3 -> {
-                        if (currentIndex + 1 < steps.size) {
+                val currentIndex = question.learningStepIndex.coerceAtLeast(0)
+                if (steps.isEmpty() || (currentIndex >= steps.size && grade != 1)) {
+                    nextState = "Review"
+                    nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+                } else {
+                    when (grade) {
+                        2 -> {
+                            // Hard keeps the current step and uses the upstream step-zero delay rule.
                             nextState = priorState
-                            nextStepIndex = currentIndex + 1
-                            nextIntervalDays = steps[nextStepIndex] / 1440.0
-                        } else {
+                            nextStepIndex = currentIndex
+                            nextIntervalDays = hardStepMinutes(steps, currentIndex) / 1440.0
+                        }
+                        3 -> {
+                            if (currentIndex + 1 < steps.size) {
+                                nextState = priorState
+                                nextStepIndex = currentIndex + 1
+                                nextIntervalDays = steps[nextStepIndex] / 1440.0
+                            } else {
+                                nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
+                            }
+                        }
+                        else -> {
+                            // Easy graduates immediately from a learning/relearning sequence.
                             nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
                         }
-                    }
-                    else -> {
-                        // Easy graduates immediately from a learning/relearning sequence.
-                        nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
                     }
                 }
             }
             else -> {
-                // Good/Easy (and Hard on a new card) graduate directly to FSRS review.
+                // Review cards and completed learning sequences use the FSRS review interval.
                 nextIntervalDays = intervalFor(stability, settings.desiredRetention, settings.maxIntervalDays)
             }
         }
@@ -139,14 +195,18 @@ object ReviewScheduler {
     }
 
     /**
-     * FSRS-6 uses whole study-day differences. The local calendar day is used so
-     * reviews either side of midnight count as a new study day, not as a fraction
-     * of 24 elapsed hours. Pass a fixed ZoneId in tests for deterministic results.
+     * py-fsrs v6.0.0 uses timedelta.days: completed 24-hour periods, not local
+     * calendar-day boundaries. A review 15 minutes after midnight can therefore
+     * still be a same-day/short-term review if fewer than 24 hours elapsed.
      */
-    fun elapsedStudyDays(lastReviewedAt: Long, reviewedAt: Long, zoneId: ZoneId = ZoneId.systemDefault()): Double {
-        val previousDay = Instant.ofEpochMilli(lastReviewedAt).atZone(zoneId).toLocalDate()
-        val currentDay = Instant.ofEpochMilli(reviewedAt).atZone(zoneId).toLocalDate()
-        return ChronoUnit.DAYS.between(previousDay, currentDay).coerceAtLeast(0).toDouble()
+    fun elapsedStudyDays(lastReviewedAt: Long, reviewedAt: Long): Double =
+        ((reviewedAt - lastReviewedAt).toDouble() / DAY_MS).toLong().coerceAtLeast(0L).toDouble()
+
+    /** py-fsrs v6.0.0 Hard learning/relearning delay while retaining the step. */
+    private fun hardStepMinutes(steps: List<Int>, currentIndex: Int): Double = when {
+        currentIndex == 0 && steps.size == 1 -> steps[0] * 1.5
+        currentIndex == 0 && steps.size >= 2 -> (steps[0] + steps[1]) / 2.0
+        else -> steps[currentIndex].toDouble()
     }
 
     /** Reads configured learning/relearning delays in minutes, preserving order and repeated steps. */
@@ -159,8 +219,9 @@ object ReviewScheduler {
         val safeMax = maxIntervalDays.coerceIn(1, 36500)
         val decay = weights[20]
         val factor = 0.9.pow(-1.0 / decay) - 1.0
-        val days = stability.coerceAtLeast(0.1) / factor * (safeRetention.pow(-1.0 / decay) - 1.0)
-        return days.roundToInt().coerceIn(1, safeMax).toDouble()
+        val days = stability.coerceAtLeast(0.001) / factor * (safeRetention.pow(-1.0 / decay) - 1.0)
+        // Python's round() uses ties-to-even; kotlin.math.round matches that rule.
+        return kotlin.math.round(days).toInt().coerceIn(1, safeMax).toDouble()
     }
 
     fun calculateRetrievability(elapsedDays: Double, stability: Double): Double = retrievability(elapsedDays, stability)
@@ -168,23 +229,29 @@ object ReviewScheduler {
     private fun retrievability(elapsedDays: Double, stability: Double): Double {
         val decay = weights[20]
         val factor = 0.9.pow(-1.0 / decay) - 1.0
-        return (1.0 + factor * elapsedDays.coerceAtLeast(0.0) / stability.coerceAtLeast(0.1)).pow(-decay)
+        return (1.0 + factor * elapsedDays.coerceAtLeast(0.0) / stability.coerceAtLeast(0.001)).pow(-decay)
     }
 
-    private fun initialDifficulty(grade: Int): Double =
-        (weights[4] - exp(weights[5] * (grade - 1)) + 1.0).coerceIn(1.0, 10.0)
+    private fun initialDifficulty(grade: Int): Double {
+        val value = weights[4] - exp(weights[5] * (grade - 1)) + 1.0
+        return value.coerceIn(1.0, 10.0)
+    }
 
     private fun nextDifficulty(current: Double, grade: Int): Double {
         val delta = -weights[6] * (grade - 3)
         val damped = delta * ((10.0 - current) / 9.0)
         val raw = current + damped
+        // py-fsrs v6.0.0 uses the clamped initial Easy difficulty as the
+        // mean-reversion target, then clamps the final updated difficulty.
         return (weights[7] * initialDifficulty(4) + (1.0 - weights[7]) * raw).coerceIn(1.0, 10.0)
     }
 
     private fun nextShortTermStability(stability: Double, grade: Int): Double {
         var increase = exp(weights[17] * (grade - 3 + weights[18])) * stability.pow(-weights[19])
-        if (grade >= 2) increase = max(increase, 1.0)
-        return (stability * increase).coerceAtLeast(0.1)
+        // The pinned v6.0.0 implementation applies the >= 1 floor only to
+        // Good and Easy; Hard is allowed to reduce short-term stability.
+        if (grade == 3 || grade == 4) increase = max(increase, 1.0)
+        return (stability * increase).coerceAtLeast(0.001)
     }
 
     private fun nextForgetStability(difficulty: Double, stability: Double, retrievability: Double): Double {
@@ -192,7 +259,7 @@ object ReviewScheduler {
         val calculated = weights[11] * difficulty.pow(-weights[12]) *
             ((stability + 1.0).pow(weights[13]) - 1.0) *
             exp((1.0 - retrievability) * weights[14])
-        return minOf(calculated, minimum).coerceAtLeast(0.1)
+        return minOf(calculated, minimum).coerceAtLeast(0.001)
     }
 
     private fun nextRecallStability(difficulty: Double, stability: Double, retrievability: Double, grade: Int): Double {
@@ -200,7 +267,7 @@ object ReviewScheduler {
         val easyBonus = if (grade == 4) weights[16] else 1.0
         val growth = exp(weights[8]) * (11.0 - difficulty) * stability.pow(-weights[9]) *
             (exp((1.0 - retrievability) * weights[10]) - 1.0) * hardPenalty * easyBonus
-        return (stability * (1.0 + growth)).coerceAtLeast(0.1)
+        return (stability * (1.0 + growth)).coerceAtLeast(0.001)
     }
 }
 

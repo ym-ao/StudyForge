@@ -3,9 +3,19 @@ package com.studyforge.app.data
 /** Pure validation and ordering rules shared by the structured question editor. */
 object QuestionAuthoringRules {
     fun validateBlocks(blocks: List<QuestionContentBlockEntity>): String? {
-        blocks.filter { it.kind.equals("DERIVATION", true) }.forEachIndexed { index, block ->
-            val issue = DerivationRules.validate(DerivationRules.parse(block.text))
-            if (issue != null) return "Derivation block ${index + 1}: $issue"
+        blocks.forEachIndexed { index, block ->
+            when (block.kind.uppercase()) {
+                "DERIVATION" -> {
+                    val issue = DerivationRules.validate(DerivationRules.parse(block.text))
+                    if (issue != null) return "Derivation block ${index + 1}: $issue"
+                }
+                "TABLE" -> ContentBlockParsing.validateTable(block.text)?.let {
+                    return "Table block ${index + 1}: $it"
+                }
+                "GRAPH" -> ContentBlockParsing.validateGraph(block.text)?.let {
+                    return "Graph block ${index + 1}: $it"
+                }
+            }
         }
         return null
     }

@@ -18,6 +18,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -39,20 +41,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.studyforge.app.data.QuestionEntity
+import com.studyforge.app.data.QuestionTypeAnalytics
+import com.studyforge.app.data.CollectionEntity
+import com.studyforge.app.data.QuestionCollectionCrossRef
 import com.studyforge.app.data.QuestionPartEntity
 import com.studyforge.app.data.MultipartExamRules
 import com.studyforge.app.data.QuestionContentBlockEntity
 import com.studyforge.app.data.StudySessionPresetEntity
 import com.studyforge.app.data.StudySessionRules
+import com.studyforge.app.data.StudySessionPresetRules
 import com.studyforge.app.data.DerivationRules
 import com.studyforge.app.data.ReviewLogEntity
 import com.studyforge.app.data.ReviewScheduler
 import com.studyforge.app.data.StudySettingsEntity
+import com.studyforge.app.data.ExamAttemptEntity
+import com.studyforge.app.data.ExamAttemptRules
+import com.studyforge.app.data.ReviewTrendRules
+import com.studyforge.app.data.ClozeRules
 import kotlinx.coroutines.delay
 import org.json.JSONArray
+import org.json.JSONObject
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private val mistakeCategories = listOf(
     "Concept gap", "Wrong formula", "Calculation / algebra", "Unit conversion",
@@ -66,9 +80,12 @@ fun StudyScreen(
     contentBlocks: List<QuestionContentBlockEntity>,
     questionParts: List<QuestionPartEntity>,
     sessionPresets: List<StudySessionPresetEntity>,
+    collections: List<CollectionEntity>,
+    collectionLinks: List<QuestionCollectionCrossRef>,
     settings: StudySettingsEntity,
     onSaveSessionPreset: (StudySessionPresetEntity) -> Unit,
     onDeleteSessionPreset: (StudySessionPresetEntity) -> Unit,
+    onSaveExamAttempt: (ExamAttemptEntity) -> Unit,
     onReview: (QuestionEntity, String, Boolean?, String?, String) -> Unit
 ) {
     var mode by rememberSaveable { mutableStateOf("Due") }
@@ -80,6 +97,7 @@ fun StudyScreen(
     var stepByStepStage by rememberSaveable { mutableIntStateOf(0) }
     var selectedTopic by rememberSaveable { mutableStateOf("") }
     var activeSessionPresetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var editingSessionPresetId by rememberSaveable { mutableStateOf<String?>(null) }
     var showSaveSessionDialog by remember { mutableStateOf(false) }
     var newSessionName by remember { mutableStateOf("") }
     var newSessionLimit by remember { mutableStateOf("20") }
@@ -91,6 +109,10 @@ fun StudyScreen(
     var newSessionType by remember { mutableStateOf("All") }
     var newSessionStatus by remember { mutableStateOf("All") }
     var newSessionPerformance by remember { mutableStateOf("All") }
+    var newSessionCollectionId by remember { mutableStateOf("") }
+    var collectionMenuExpanded by remember { mutableStateOf(false) }
+    var sessionPresetPendingDelete by remember { mutableStateOf<StudySessionPresetEntity?>(null) }
+    val sessionPresetNameConflict = StudySessionPresetRules.hasNameConflict(sessionPresets, newSessionName, editingSessionPresetId)
 
     val activeSessionPreset = sessionPresets.firstOrNull { it.id == activeSessionPresetId }
     val now = System.currentTimeMillis()
@@ -129,8 +151,11 @@ fun StudyScreen(
         "Topic" -> if (selectedTopic.isBlank()) questions else questions.filter { it.topic.equals(selectedTopic, true) }
         else -> questions
     }
+    val collectionQuestionIds = remember(collectionLinks, activeSessionPreset?.collectionId) {
+        activeSessionPreset?.collectionId?.takeIf { it.isNotBlank() }?.let { id -> collectionLinks.filter { it.collectionId == id }.map { it.questionId }.toSet() }
+    }
     val activeQuestions = activeSessionPreset?.let { preset ->
-        StudySessionRules.filterQuestions(modeQuestions, preset)
+        StudySessionRules.filterQuestions(modeQuestions, preset, collectionQuestionIds)
     } ?: modeQuestions
 
     LaunchedEffect(mode, activeQuestions.size, selectedTopic) {
@@ -144,12 +169,30 @@ fun StudyScreen(
 
     if (showSaveSessionDialog) {
         AlertDialog(
-            onDismissRequest = { showSaveSessionDialog = false },
-            title = { Text("Save study session") },
+            onDismissRequest = { showSaveSessionDialog = false; editingSessionPresetId = null },
+            title = { Text(if (editingSessionPresetId != null) "Edit study session" else "Save study session") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(newSessionName, { newSessionName = it.take(50) }, label = { Text("Session name") }, singleLine = true)
+                    OutlinedTextField(newSessionName, { newSessionName = it.take(50) }, label = { Text("Session name") }, singleLine = true, isError = sessionPresetNameConflict)
+                    if (sessionPresetNameConflict) Text("Another saved session already uses this name. Choose a different name.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(newSessionLimit, { newSessionLimit = it.filter(Char::isDigit).take(3) }, label = { Text("Question limit (1–500)") }, singleLine = true)
+                    Text("Study mode", style = MaterialTheme.typography.labelMedium)
+                    listOf("Due", "All", "Practice", "Random", "Ordered", "Topic", "Weakest", "Step-by-step", "Exam").chunked(3).forEach { rowModes ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            rowModes.forEach { option ->
+                                FilterChip(selected = mode == option, onClick = { mode = option }, label = { Text(option) })
+                            }
+                        }
+                    }
+                    Box {
+                        OutlinedButton(onClick = { collectionMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text(collections.firstOrNull { it.id == newSessionCollectionId }?.name ?: "All collections")
+                        }
+                        DropdownMenu(expanded = collectionMenuExpanded, onDismissRequest = { collectionMenuExpanded = false }) {
+                            DropdownMenuItem(text = { Text("All collections") }, onClick = { newSessionCollectionId = ""; collectionMenuExpanded = false })
+                            collections.forEach { collection -> DropdownMenuItem(text = { Text(collection.name) }, onClick = { newSessionCollectionId = collection.id; collectionMenuExpanded = false }) }
+                        }
+                    }
                     OutlinedTextField(newSessionSubject, { newSessionSubject = it.take(120) }, label = { Text("Subject (optional)") }, singleLine = true)
                     OutlinedTextField(newSessionChapter, { newSessionChapter = it.take(120) }, label = { Text("Chapter (optional)") }, singleLine = true)
                     OutlinedTextField(newSessionTag, { newSessionTag = it.take(80) }, label = { Text("Tag (optional)") }, singleLine = true)
@@ -160,7 +203,7 @@ fun StudyScreen(
                     }
                     Text("Question type", style = MaterialTheme.typography.labelMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("All", "Flashcard", "MCQ").forEach { v -> FilterChip(selected = newSessionType == v, onClick = { newSessionType = v }, label = { Text(v) }) }
+                        listOf("All", "Flashcard", "MCQ", "True/False", "Numerical", "Cloze").forEach { v -> FilterChip(selected = newSessionType == v, onClick = { newSessionType = v }, label = { Text(v) }) }
                     }
                     Text("Status", style = MaterialTheme.typography.labelMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -177,7 +220,7 @@ fun StudyScreen(
                 Button(onClick = {
                     val limit = newSessionLimit.toIntOrNull()?.coerceIn(1, 500) ?: 20
                     if (newSessionName.isNotBlank()) {
-                        val existing = sessionPresets.firstOrNull { it.name.equals(newSessionName.trim(), true) }
+                        val existing = StudySessionPresetRules.existingForSave(sessionPresets, editingSessionPresetId, newSessionName)
                         onSaveSessionPreset(
                             StudySessionPresetEntity(
                                 id = existing?.id ?: java.util.UUID.randomUUID().toString(),
@@ -192,21 +235,40 @@ fun StudyScreen(
                                 questionType = newSessionType,
                                 status = newSessionStatus,
                                 performance = newSessionPerformance,
+                                collectionId = newSessionCollectionId,
                                 questionLimit = limit,
                                 createdAt = existing?.createdAt ?: System.currentTimeMillis(),
                                 updatedAt = System.currentTimeMillis()
                             )
                         )
+                        editingSessionPresetId = null
                         showSaveSessionDialog = false
                     }
-                }, enabled = newSessionName.isNotBlank()) { Text("Save") }
+                }, enabled = newSessionName.isNotBlank() && !sessionPresetNameConflict) { Text("Save") }
             },
-            dismissButton = { TextButton(onClick = { showSaveSessionDialog = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { showSaveSessionDialog = false; editingSessionPresetId = null }) { Text("Cancel") } }
+        )
+    }
+
+    sessionPresetPendingDelete?.let { preset ->
+        AlertDialog(
+            onDismissRequest = { sessionPresetPendingDelete = null },
+            title = { Text("Delete saved session?") },
+            text = { Text("\"${preset.name}\" will be removed. Your questions and review history will not be affected.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteSessionPreset(preset)
+                    if (activeSessionPresetId == preset.id) activeSessionPresetId = null
+                    if (editingSessionPresetId == preset.id) { editingSessionPresetId = null; showSaveSessionDialog = false }
+                    sessionPresetPendingDelete = null
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { sessionPresetPendingDelete = null }) { Text("Cancel") } }
         )
     }
 
     if (mode == "Exam") {
-        ExamModeScreen(questions = activeQuestions, questionParts = questionParts, settings = settings, onReview = onReview, onExit = { mode = "Due" })
+        ExamModeScreen(questions = activeQuestions, questionParts = questionParts, settings = settings, onSaveExamAttempt = onSaveExamAttempt, onReview = onReview, onExit = { mode = "Due" })
         return
     }
 
@@ -214,7 +276,21 @@ fun StudyScreen(
         Text("Study", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Saved sessions", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = { newSessionName = ""; newSessionLimit = "20"; showSaveSessionDialog = true }) { Text("Save current") }
+            OutlinedButton(onClick = {
+                editingSessionPresetId = null
+                newSessionName = ""
+                newSessionLimit = "20"
+                newSessionSubject = ""
+                newSessionChapter = ""
+                newSessionTag = ""
+                newSessionDifficulty = "All"
+                newSessionExam = ""
+                newSessionType = "All"
+                newSessionStatus = "All"
+                newSessionPerformance = "All"
+                newSessionCollectionId = ""
+                showSaveSessionDialog = true
+            }) { Text("Save current") }
         }
         if (sessionPresets.isNotEmpty()) {
             sessionPresets.forEach { preset ->
@@ -227,10 +303,28 @@ fun StudyScreen(
                             selectedTopic = preset.topic
                             index = 0
                         },
-                        label = { Text("${preset.name} • ${preset.questionLimit}") },
+                        label = { Text("${preset.name} • ${preset.questionLimit}${preset.collectionId.takeIf { it.isNotBlank() }?.let { " • ${collections.firstOrNull { c -> c.id == it }?.name ?: "Collection"}" } ?: ""}") },
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(onClick = { onDeleteSessionPreset(preset) }) { Text("Delete") }
+                    TextButton(onClick = {
+                        activeSessionPresetId = preset.id
+                        editingSessionPresetId = preset.id
+                        mode = preset.mode.takeIf { it in StudySessionRules.supportedModes } ?: "Practice"
+                        selectedTopic = preset.topic
+                        newSessionName = preset.name
+                        newSessionLimit = preset.questionLimit.coerceIn(1, 500).toString()
+                        newSessionSubject = preset.subject
+                        newSessionChapter = preset.chapter
+                        newSessionTag = preset.tag
+                        newSessionDifficulty = preset.difficulty
+                        newSessionExam = preset.exam
+                        newSessionType = preset.questionType
+                        newSessionStatus = preset.status
+                        newSessionPerformance = preset.performance
+                        newSessionCollectionId = preset.collectionId
+                        showSaveSessionDialog = true
+                    }) { Text("Edit") }
+                    TextButton(onClick = { sessionPresetPendingDelete = preset }) { Text("Delete") }
                 }
             }
         }
@@ -267,6 +361,7 @@ fun StudyScreen(
 
         val safeIndex = index.coerceIn(0, activeQuestions.lastIndex)
         val q = activeQuestions[safeIndex]
+        var revealedHintIds by remember(q.id) { mutableStateOf(emptySet<String>()) }
         val options = remember(q.id, q.optionsJson) {
             runCatching { JSONArray(q.optionsJson).let { array -> (0 until array.length()).map { array.optString(it) } } }.getOrDefault(emptyList())
         }
@@ -277,11 +372,20 @@ fun StudyScreen(
                     Spacer(Modifier.weight(1f))
                     Text("${safeIndex + 1} / ${activeQuestions.size}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                RichContentText(q.prompt, style = MaterialTheme.typography.titleLarge)
+                RichContentText(if (q.type == "Cloze" && !revealed) ClozeRules.mask(q.prompt) else q.prompt, style = MaterialTheme.typography.titleLarge)
                 contentBlocks.filter { it.questionId == q.id }.sortedBy { it.position }.forEach { block ->
                     when (block.kind.uppercase()) {
                         "LATEX" -> if (block.text.isNotBlank()) LatexFormulaView(block.text)
                         "HEADING" -> Text(block.text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        "HINT" -> if (block.text.isNotBlank()) {
+                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("Hint", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    if (block.id in revealedHintIds) RichContentText(block.text)
+                                    else OutlinedButton(onClick = { revealedHintIds = revealedHintIds + block.id }) { Text("Reveal hint") }
+                                }
+                            }
+                        }
                         "LIST" -> block.text.lineSequence().filter { it.isNotBlank() }.forEach { line -> RichContentText(if (line.trimStart().startsWith("-")) line else "- $line") }
                         "IMAGE" -> if (block.mediaBase64.isNotBlank()) OfflineImageBlock(block.mediaBase64, block.altText)
                         "TABLE" -> if (block.text.isNotBlank()) ContentTable(block.text)
@@ -291,7 +395,9 @@ fun StudyScreen(
                     }
                 }
                 val metadata = listOf(q.subject, q.chapter, q.topic).filter { it.isNotBlank() }.joinToString(" • ")
+                val sourceMetadata = listOf(q.sourceTitle, q.sourceDetail).filter { it.isNotBlank() }.joinToString(" · ")
                 if (metadata.isNotBlank()) Text(metadata, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (sourceMetadata.isNotBlank()) Text("Source: $sourceMetadata", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (q.learningState == "Learning" || q.learningState == "Relearning") {
                     val configuredSteps = ReviewScheduler.parseSteps(
                         if (q.learningState == "Relearning") settings.relearningStepsMinutesCsv else settings.learningStepsMinutesCsv
@@ -305,7 +411,7 @@ fun StudyScreen(
                 }
                 if (q.latex.isNotBlank()) { HorizontalDivider(); LatexFormulaView(q.latex, Modifier.fillMaxWidth()) }
 
-                if (q.type == "MCQ" && options.isNotEmpty()) {
+                if ((q.type == "MCQ" || q.type == "True/False") && options.isNotEmpty()) {
                     options.forEachIndexed { optionIndex, option ->
                         val prefix = ('A'.code + optionIndex).toChar()
                         val isCorrectOption = checked && option == q.answer
@@ -340,6 +446,15 @@ fun StudyScreen(
                             }
                         }
                     }
+                } else if (q.type == "Numerical") {
+                    if (!checked) {
+                        OutlinedTextField(value = selectedAnswer.orEmpty(), onValueChange = { selectedAnswer = it }, label = { Text("Your numerical answer") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        Button(onClick = { checked = true }, enabled = !selectedAnswer.isNullOrBlank(), modifier = Modifier.fillMaxWidth()) { Text("Check answer") }
+                    } else {
+                        val correct = selectedAnswer.orEmpty().trim().replace(",", "") == q.answer.trim().replace(",", "")
+                        Text(if (correct) "Correct answer" else "Check the expected value below", fontWeight = FontWeight.Bold, color = if (correct) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error)
+                        RichContentText("Answer: ${q.answer}", style = MaterialTheme.typography.titleMedium)
+                    }
                 } else {
                     if (!revealed) Button(onClick = { revealed = true; stepByStepStage = 1 }, modifier = Modifier.fillMaxWidth()) { Text("Reveal answer") }
                     else {
@@ -367,7 +482,11 @@ fun StudyScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                     listOf(ReviewScheduler.AGAIN, ReviewScheduler.HARD, ReviewScheduler.GOOD, ReviewScheduler.EASY).forEach { rating ->
                         OutlinedButton(onClick = {
-                            val wasCorrect = if (q.type == "MCQ") selectedAnswer == q.answer else null
+                            val wasCorrect = when (q.type) {
+                                "MCQ", "True/False" -> selectedAnswer == q.answer
+                                "Numerical" -> selectedAnswer.orEmpty().trim().replace(",", "") == q.answer.trim().replace(",", "")
+                                else -> null
+                            }
                             val reviewMode = when (q.learningState) {
                                 "New" -> "New"
                                 "Learning" -> "Learning"
@@ -395,6 +514,7 @@ private fun ExamModeScreen(
     questions: List<QuestionEntity>,
     questionParts: List<QuestionPartEntity>,
     settings: StudySettingsEntity,
+    onSaveExamAttempt: (ExamAttemptEntity) -> Unit,
     onReview: (QuestionEntity, String, Boolean?, String?, String) -> Unit,
     onExit: () -> Unit
 ) {
@@ -402,32 +522,35 @@ private fun ExamModeScreen(
     val eligible = remember(questions, partsByQuestion) {
         questions.filter { q ->
             val hasParts = partsByQuestion[q.id].orEmpty().isNotEmpty()
-            val hasMcq = q.type == "MCQ" && runCatching { JSONArray(q.optionsJson).length() >= 2 }.getOrDefault(false)
-            hasParts || hasMcq
+            val hasMcq = q.type in setOf("MCQ", "True/False") && runCatching { JSONArray(q.optionsJson).length() >= 2 }.getOrDefault(false)
+            val hasNumerical = q.type == "Numerical"
+            hasParts || hasMcq || hasNumerical
         }
     }
     var examQuestions by remember { mutableStateOf(emptyList<QuestionEntity>()) }
     val answers = remember { mutableStateMapOf<String, String>() }
     val marked = remember { mutableStateMapOf<String, Boolean>() }
+    val manualPartScores = remember { mutableStateMapOf<String, String>() }
     var currentIndex by rememberSaveable { mutableIntStateOf(0) }
     var remainingSeconds by rememberSaveable { mutableIntStateOf(settings.examDurationMinutes * 60) }
     var started by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
     var confirmSubmit by remember { mutableStateOf(false) }
+    var startedAt by remember { mutableStateOf(0L) }
+    var attemptSaved by remember { mutableStateOf(false) }
 
     fun partsFor(q: QuestionEntity) = partsByQuestion[q.id].orEmpty()
     fun hasAnswer(q: QuestionEntity): Boolean = if (partsFor(q).isNotEmpty()) partsFor(q).any { answers[it.id]?.isNotBlank() == true } else answers[q.id]?.isNotBlank() == true
-    fun earned(q: QuestionEntity): Double = if (partsFor(q).isNotEmpty()) MultipartExamRules.score(partsFor(q), answers.filterKeys { key -> partsFor(q).any { it.id == key } }) .earned else if (answers[q.id] == q.answer) 1.0 else 0.0
+    fun earned(q: QuestionEntity): Double = if (partsFor(q).isNotEmpty()) {
+        val qParts = partsFor(q)
+        val answerMap = answers.filterKeys { key -> qParts.any { it.id == key } }
+        val manual = qParts.mapNotNull { part -> manualPartScores[part.id]?.toDoubleOrNull()?.let { part.id to it } }.toMap()
+        MultipartExamRules.score(qParts, answerMap, manual).earned
+    } else if (if (q.type == "Numerical") answers[q.id].orEmpty().trim().replace(",", "") == q.answer.trim().replace(",", "") else answers[q.id] == q.answer) 1.0 else 0.0
     fun possible(q: QuestionEntity): Double = if (partsFor(q).isNotEmpty()) MultipartExamRules.score(partsFor(q), emptyMap()).possible else 1.0
     fun finishExam() {
         if (submitted) return
         submitted = true
-        examQuestions.forEach { q ->
-            if (hasAnswer(q)) {
-                val full = earned(q) >= possible(q) && possible(q) > 0.0
-                onReview(q, if (full) ReviewScheduler.GOOD else ReviewScheduler.AGAIN, full, if (full) null else "Exam answer incorrect or incomplete", if (q.learningState == "New") "New" else "Exam")
-            }
-        }
     }
 
     LaunchedEffect(started, submitted) {
@@ -440,16 +563,16 @@ private fun ExamModeScreen(
     if (!started) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Exam mode", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("Timed exams support standard MCQs and multipart questions. Multipart scores use each part's assigned points.")
+            Text("Timed exams support MCQs, true/false, exact-match numerical answers and multipart questions. Multipart scores use each part's assigned points.")
             Text("Available exam questions: ${eligible.size}")
             Text("Configured exam: ${settings.examQuestionCount} questions • ${settings.examDurationMinutes} minutes • ${if (settings.examRandomize) "random order" else "library order"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Button(onClick = {
                 val ordered = if (settings.examRandomize) eligible.shuffled() else eligible.sortedBy { it.createdAt }
                 examQuestions = ordered.take(settings.examQuestionCount)
-                answers.clear(); marked.clear(); currentIndex = 0; remainingSeconds = settings.examDurationMinutes * 60; submitted = false; started = true
+                answers.clear(); marked.clear(); manualPartScores.clear(); currentIndex = 0; remainingSeconds = settings.examDurationMinutes * 60; submitted = false; attemptSaved = false; startedAt = System.currentTimeMillis(); started = true
             }, enabled = eligible.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Start exam") }
             OutlinedButton(onClick = onExit, modifier = Modifier.fillMaxWidth()) { Text("Back to study") }
-            if (eligible.isEmpty()) Text("Add an MCQ or a question with authored parts to start an exam.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (eligible.isEmpty()) Text("Add an MCQ, numerical question or a question with authored parts to start an exam.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
@@ -478,7 +601,20 @@ private fun ExamModeScreen(
                         if (qParts.isNotEmpty()) qParts.forEach { part ->
                             val response = answers[part.id].orEmpty()
                             val correct = MultipartExamRules.isCorrect(part, response)
-                            Text("${part.prompt} • ${if (correct) "Correct" else "Not correct"} (${if (correct) part.points else 0.0}/${part.points} pts)")
+                            val automaticPoints = if (correct) part.points else 0.0
+                            val awardedText = manualPartScores[part.id] ?: "${"%.2f".format(automaticPoints)}"
+                            Text(part.prompt, fontWeight = FontWeight.Medium)
+                            Text("Automatic marking: ${"%.2f".format(automaticPoints)} / ${part.points} pts")
+                            OutlinedTextField(
+                                value = awardedText,
+                                onValueChange = { value ->
+                                    if (value.length <= 16 && value.matches(Regex("[0-9]*([.]?[0-9]*)?"))) manualPartScores[part.id] = value
+                                },
+                                label = { Text("Examiner-awarded points (0–${part.points})") },
+                                supportingText = { Text("Adjust for method marks or other partial credit. Values are capped at the part maximum.") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             Text("Your answer: ${response.ifBlank { "Not answered" }}")
                             Text("Expected answer: ${part.answer}", fontWeight = FontWeight.Medium)
                             if (part.explanation.isNotBlank()) RichContentText(part.explanation)
@@ -490,7 +626,57 @@ private fun ExamModeScreen(
                     }
                 }
             }
-            Button(onClick = { started = false; submitted = false; examQuestions = emptyList(); onExit() }, modifier = Modifier.fillMaxWidth()) { Text("Finish") }
+            Button(onClick = {
+                if (!attemptSaved) {
+                    val itemSnapshots = JSONArray().apply {
+                        examQuestions.forEachIndexed { index, question ->
+                            val qParts = partsFor(question)
+                            put(JSONObject()
+                                .put("position", index + 1).put("questionId", question.id)
+                                .put("prompt", question.prompt).put("subject", question.subject)
+                                .put("chapter", question.chapter).put("topic", question.topic)
+                                .put("questionType", question.type).put("optionsJson", question.optionsJson)
+                                .put("response", if (qParts.isEmpty()) answers[question.id].orEmpty() else "")
+                                .put("correctAnswer", if (qParts.isEmpty()) question.answer else "")
+                                .put("earnedPoints", earned(question)).put("possiblePoints", possible(question))
+                                .put("answered", hasAnswer(question)).put("marked", marked[question.id] == true)
+                                .put("parts", JSONArray().apply {
+                                    qParts.forEach { part ->
+                                        val response = answers[part.id].orEmpty()
+                                        val autoCorrect = MultipartExamRules.isCorrect(part, response)
+                                        val autoPoints = if (autoCorrect) part.points else 0.0
+                                        val awarded = manualPartScores[part.id]?.toDoubleOrNull()?.coerceIn(0.0, part.points) ?: autoPoints
+                                        put(JSONObject().put("partId", part.id).put("prompt", part.prompt)
+                                            .put("response", response).put("correctAnswer", part.answer)
+                                            .put("automaticPoints", autoPoints).put("awardedPoints", awarded)
+                                            .put("possiblePoints", part.points))
+                                    }
+                                }))
+                        }
+                    }
+                    val earnedTotal = examQuestions.sumOf { earned(it) }
+                    val possibleTotal = examQuestions.sumOf { possible(it) }
+                    val now = System.currentTimeMillis()
+                    onSaveExamAttempt(ExamAttemptEntity(
+                        id = java.util.UUID.randomUUID().toString(), startedAt = startedAt,
+                        completedAt = now, durationSeconds = ((settings.examDurationMinutes * 60) - remainingSeconds).coerceAtLeast(0),
+                        questionCount = examQuestions.size, answeredCount = examQuestions.count { hasAnswer(it) },
+                        markedCount = marked.values.count { it }, earnedPoints = earnedTotal,
+                        possiblePoints = possibleTotal,
+                        scorePercent = ExamAttemptRules.percentage(earnedTotal, possibleTotal),
+                        itemsJson = itemSnapshots.toString()
+                    ))
+                    attemptSaved = true
+                    examQuestions.forEach { question ->
+                        if (hasAnswer(question)) {
+                            val full = earned(question) >= possible(question) && possible(question) > 0.0
+                            onReview(question, if (full) ReviewScheduler.GOOD else ReviewScheduler.AGAIN, full,
+                                if (full) null else "Exam answer incorrect or incomplete", if (question.learningState == "New") "New" else "Exam")
+                        }
+                    }
+                }
+                started = false; submitted = false; examQuestions = emptyList(); onExit()
+            }, enabled = !attemptSaved, modifier = Modifier.fillMaxWidth()) { Text(if (attemptSaved) "Saved" else "Save grading and finish") }
         }
         return
     }
@@ -532,6 +718,8 @@ private fun ExamModeScreen(
                             OutlinedTextField(value = answers[part.id].orEmpty(), onValueChange = { answers[part.id] = it.take(2000) }, label = { Text("Your answer") }, modifier = Modifier.fillMaxWidth())
                         }
                     }
+                } else if (q.type == "Numerical") {
+                    OutlinedTextField(value = answers[q.id].orEmpty(), onValueChange = { answers[q.id] = it.take(100) }, label = { Text("Your numerical answer") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 } else {
                     options.forEachIndexed { optionIndex, option ->
                         Card(modifier = Modifier.fillMaxWidth().clickable { answers[q.id] = option }, colors = CardDefaults.cardColors(containerColor = if (answers[q.id] == option) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
@@ -561,7 +749,8 @@ private fun ExamModeScreen(
 }
 
 @Composable
-fun ProgressScreen(questions: List<QuestionEntity>, reviewLogs: List<ReviewLogEntity>) {
+fun ProgressScreen(questions: List<QuestionEntity>, reviewLogs: List<ReviewLogEntity>, examAttempts: List<ExamAttemptEntity>) {
+    var expandedAttemptId by remember { mutableStateOf<String?>(null) }
     val now = System.currentTimeMillis()
     val due = questions.count { it.dueAt == null || it.dueAt <= now }
     val newCount = questions.count { it.learningState == "New" }
@@ -586,9 +775,19 @@ fun ProgressScreen(questions: List<QuestionEntity>, reviewLogs: List<ReviewLogEn
     val weakChapters = questions.groupBy { (it.chapter.ifBlank { "Unspecified chapter" }) to (it.subject.ifBlank { "Uncategorized" }) }
         .mapValues { (_, items) -> items.sumOf { it.incorrectCount } }.toList().sortedByDescending { it.second }.take(6)
     val reviewDays = reviewLogs.map { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date(it.reviewedAt)) }.distinct().size
-    val examLogs = reviewLogs.filter { it.reviewMode.equals("Exam", true) && it.wasCorrect != null }
-    val examAccuracy = if (examLogs.isEmpty()) 0 else examLogs.count { it.wasCorrect == true } * 100 / examLogs.size
-    val examAttempts = reviewLogs.count { it.reviewMode.equals("Exam", true) }
+    val reviewTrend = ReviewTrendRules.summarize(reviewLogs, zoneId = ZoneId.systemDefault())
+    val trendDateFormat = remember { DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault()) }
+    val typeAccuracy = QuestionTypeAnalytics.summarize(questions, reviewLogs)
+    val examResponseLogs = reviewLogs.filter { it.reviewMode.equals("Exam", true) && it.wasCorrect != null }
+    val examAccuracy = if (examResponseLogs.isEmpty()) 0 else examResponseLogs.count { it.wasCorrect == true } * 100 / examResponseLogs.size
+    val averageExamScore = ExamAttemptRules.averageScore(examAttempts).toInt()
+    val bestExamScore = ExamAttemptRules.bestScore(examAttempts).toInt()
+    val medianExamScore = ExamAttemptRules.medianScore(examAttempts).toInt()
+    val examTrend = ExamAttemptRules.recentTrend(examAttempts)
+    val examTrendLabel = examTrend?.let { delta ->
+        val sign = if (delta > 0.0) "+" else ""
+        "$sign${"%.1f".format(delta)} percentage points across the latest five vs previous five"
+    } ?: "Complete at least 10 exams to see a five-attempt trend."
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Progress", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -596,7 +795,29 @@ fun ProgressScreen(questions: List<QuestionEntity>, reviewLogs: List<ReviewLogEn
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Due now", due.toString(), Modifier.weight(1f)); ProgressStat("Total reviews", reviewLogs.size.toString(), Modifier.weight(1f)) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Accuracy", "$accuracy%", Modifier.weight(1f)); ProgressStat("30-day accuracy", "$recentAccuracy%", Modifier.weight(1f)) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Reviews · 7 days", lastSevenDays.toString(), Modifier.weight(1f)); ProgressStat("Active review days", reviewDays.toString(), Modifier.weight(1f)) }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Exam responses", examAttempts.toString(), Modifier.weight(1f)); ProgressStat("Exam answer accuracy", "$examAccuracy%", Modifier.weight(1f)) }
+        Card(shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Daily review activity · 14 days", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("${reviewTrend.activeDays}/14 active days • ${reviewTrend.currentStreakDays}-day current streak", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                reviewTrend.days.forEachIndexed { dayIndex, day ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(day.date.format(trendDateFormat), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        val accuracyLabel = day.accuracyPercent?.let { " • $it% accuracy" }.orEmpty()
+                        Text("${day.totalReviews} review(s)$accuracyLabel", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (dayIndex != reviewTrend.days.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Saved exams", examAttempts.size.toString(), Modifier.weight(1f)); ProgressStat("Average exam score", "$averageExamScore%", Modifier.weight(1f)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Best exam", "$bestExamScore%", Modifier.weight(1f)); ProgressStat("Median exam", "$medianExamScore%", Modifier.weight(1f)) }
+        Card(shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("Exam performance trend", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(examTrendLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        ProgressListCard("Exam score distribution", ExamAttemptRules.scoreBandCounts(examAttempts).map { it.first to "${it.second} attempt(s)" }, "Complete an exam to build your score distribution.")
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Learning status", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -604,10 +825,51 @@ fun ProgressScreen(questions: List<QuestionEntity>, reviewLogs: List<ReviewLogEn
                 Text("Questions in library: ${questions.size}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         }
+        ProgressListCard("Accuracy by question type", typeAccuracy.map { it.type to "${it.accuracyPercent}% (${it.correct}/${it.scored} correct)" }, "No scored reviews available by question type yet.")
         ProgressListCard("Topics with most incorrect answers", weakTopics.map { it.first to "${it.second} incorrect" }, "No incorrect answers recorded yet.")
         ProgressListCard("Subjects with most recorded mistakes", weakSubjects.filter { it.second > 0 }.map { it.first to "${it.second} incorrect" }, "No subject-level mistakes recorded yet.")
         ProgressListCard("Chapters with most recorded mistakes", weakChapters.filter { it.second > 0 }.map { "${it.first.second} · ${it.first.first}" to "${it.second} incorrect" }, "No chapter-level mistakes recorded yet.")
         ProgressListCard("Mistake categories", mistakes.map { it.first to "${it.second} times" }, "Mistake categories appear here when you classify an incorrect answer.")
+        Card(shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Exam history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (examAttempts.isEmpty()) Text("Completed exams will appear here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else {
+                    Text("Best score: $bestExamScore% • ${examAttempts.size} saved attempt(s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    examAttempts.take(10).forEachIndexed { index, attempt ->
+                        Column(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                expandedAttemptId = if (expandedAttemptId == attempt.id) null else attempt.id
+                            },
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("${attempt.scorePercent.toInt()}% • ${"%.2f".format(attempt.earnedPoints)} / ${"%.2f".format(attempt.possiblePoints)} points", fontWeight = FontWeight.SemiBold)
+                            Text("${attempt.answeredCount}/${attempt.questionCount} answered • ${attempt.durationSeconds / 60}m ${attempt.durationSeconds % 60}s • ${formatReviewDate(attempt.completedAt)} • ${if (expandedAttemptId == attempt.id) "Hide details" else "View details"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (expandedAttemptId == attempt.id) {
+                                val savedItems = runCatching { JSONArray(attempt.itemsJson) }.getOrDefault(JSONArray())
+                                for (itemIndex in 0 until savedItems.length()) {
+                                    val item = savedItems.optJSONObject(itemIndex) ?: continue
+                                    Column(Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text("${item.optInt("position", itemIndex + 1)}. ${item.optString("prompt", "Question")}", fontWeight = FontWeight.Medium)
+                                        Text("${"%.2f".format(item.optDouble("earnedPoints", 0.0))} / ${"%.2f".format(item.optDouble("possiblePoints", 0.0))} pts${if (item.optBoolean("marked")) " • Marked" else ""}", style = MaterialTheme.typography.bodySmall)
+                                        val response = item.optString("response")
+                                        if (response.isNotBlank()) Text("Your answer: $response", style = MaterialTheme.typography.bodySmall)
+                                        val expected = item.optString("correctAnswer")
+                                        if (expected.isNotBlank()) Text("Expected: $expected", style = MaterialTheme.typography.bodySmall)
+                                        val savedParts = item.optJSONArray("parts") ?: JSONArray()
+                                        for (partIndex in 0 until savedParts.length()) {
+                                            val part = savedParts.optJSONObject(partIndex) ?: continue
+                                            Text("• ${part.optString("prompt")}: ${part.optString("response", "(blank)")} — ${"%.2f".format(part.optDouble("awardedPoints", 0.0))}/${"%.2f".format(part.optDouble("possiblePoints", 0.0))} pts", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (index != examAttempts.take(10).lastIndex) HorizontalDivider()
+                    }
+                }
+            }
+        }
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Recent reviews", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

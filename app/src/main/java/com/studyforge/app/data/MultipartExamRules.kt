@@ -22,11 +22,19 @@ object MultipartExamRules {
         return kotlin.math.abs(actual - expected) <= allowed
     }
 
-    fun score(parts: List<QuestionPartEntity>, answers: Map<String, String>): Score {
+    /** Returns an examiner-awarded score bounded to the part's configured positive points. */
+    fun earnedPoints(part: QuestionPartEntity, response: String, manualAward: Double? = null): Double {
+        val maximum = part.points.takeIf { it.isFinite() && it > 0.0 } ?: return 0.0
+        if (manualAward != null) return if (manualAward.isFinite()) manualAward.coerceIn(0.0, maximum) else 0.0
+        return if (isCorrect(part, response)) maximum else 0.0
+    }
+
+    fun score(parts: List<QuestionPartEntity>, answers: Map<String, String>, manualAwards: Map<String, Double> = emptyMap()): Score {
         val validParts = parts.filter { it.points.isFinite() && it.points > 0.0 }
         val possible = validParts.sumOf { it.points }
         val answered = validParts.count { !answers[it.id].isNullOrBlank() }
         val correctParts = validParts.filter { isCorrect(it, answers[it.id].orEmpty()) }
-        return Score(correctParts.sumOf { it.points }, possible, answered, correctParts.size)
+        val earned = validParts.sumOf { part -> earnedPoints(part, answers[part.id].orEmpty(), manualAwards[part.id]) }
+        return Score(earned, possible, answered, correctParts.size)
     }
 }

@@ -1,3 +1,135 @@
+## 2.1.24 source continuation — FSRS-6 pinned v6.0.0 compatibility correction
+
+- Aligned the 21 FSRS parameters and memory update formulas with pinned py-fsrs v6.0.0 commit `352c7a2`.
+- Corrected Hard learning/relearning intervals, elapsed 24-hour day calculation, ties-to-even interval rounding, and empty learning/relearning step behavior.
+- Added pinned per-transition and scheduler policy regressions. Standalone Kotlin/JUnit-compatible runner: 32 passed, 0 failed; diagnostic fixture passes.
+- Android Gradle/JUnit/CI/device verification remains pending. No APK release or version/schema change.
+
+## 2.1.24 source continuation — saved-session safety (no APK release)
+
+### Fixed
+- Prevented saved-session rename collisions from overwriting a different preset. Editing targets the original stable ID; conflicting names are blocked with an explanation.
+- Added delete confirmation for saved sessions and clears the active preset selection only after confirmed deletion.
+- Added regression coverage for stable-ID editing, case-insensitive name conflicts, create-by-existing-name updates, and stale edit IDs.
+
+This is source work only; no version bump or APK release. FSRS remains excluded and unchanged.
+
+## 2.1.24 source continuation — Library bulk-selection consistency
+
+- Bulk status, difficulty, tag and collection actions now apply to every selected question in the current Library, even if a later filter change hides some selected rows. “Select visible” remains scoped to the current filtered results.
+- Added a pure selection resolver and regression test source; Android runtime tests remain pending.
+
+## [2.1.24] — 2026-11-25
+
+### Added — Library bulk tag editing (source continuation; no APK release)
+- Multi-select questions and add or remove one tag across the current visible selection.
+- Changed questions save their previous content in version history; tag changes run transactionally.
+- Comma-containing tag names are rejected to preserve the comma-separated tag storage format.
+- Corrected stale multipart-editor guidance that incorrectly said partial-credit exam scoring was not connected.
+- Added standalone tag-rule regression coverage and a CI static contract verifier. Android JUnit/device behavior remains unverified.
+
+### Fixed — FSRS-6 long-term memory-state updates
+- New stability now uses the pre-review difficulty; the difficulty transition is calculated separately from the same prior state.
+- FSRS stability/retrievability/interval math now respects the upstream 0.001 memory-state floor rather than the previous 0.1 approximation.
+- Added four-rating reference-equation fixtures and a minimum-stability regression case.
+
+### Compatibility and verification
+- App 2.1.24 / versionCode 28; Room schema 15 and JSON backup schema 15 are unchanged.
+- Static release/migration/backup checks and a standalone Kotlin scheduler harness passed locally. Full Android Gradle/JUnit, CI, signing and device verification remain pending.
+
+---
+
+
+### 2.1.24 continued V2 preparation — 2026-11-25 (no release bump)
+
+- Corrected the GitHub Actions workflow to invoke the current `verify_release_2_1_24.py` instead of the stale 2.1.23 verifier.
+- Added a static V2 source-integrity check for version/schema/migration registration, backup compatibility, CI workflow and signing contract; wired it into CI.
+- Added a same-day Hard FSRS-6 stability-floor regression test.
+- Local release/source-integrity, SQLite migration 7→8 through 14→15, and schema-15 backup checks passed. Android/JUnit, runtime migration/backup, CI execution, signing and device acceptance remain pending.
+- No APK release, versionCode change, Room/backup schema change, or signing-key change.
+
+## [2.1.22] — 2026-11-24
+
+### Fixed — first-review Learning progression
+- A new card rated Good now advances to the second configured Learning step when one exists, rather than skipping directly to Review.
+- A new card rated Hard now enters Learning at step 0 rather than graduating directly to Review.
+- Easy still graduates immediately; Good graduates when no next learning step exists. Existing Again, Hard-repeat, step advancement and restart behavior remain in place.
+- Preserved StudyForge's product-specific Hard-repeat-current-step policy; this is not a claim of exact upstream Hard-step interval parity.
+
+### Compatibility
+- App version 2.1.22 / versionCode 26. Room schema 15 and JSON backup schema 15 remain unchanged; no migration is required.
+- Existing app ID, signing alias, signing secret names and original `StudyForge_Plan.txt` are unchanged.
+
+### Verification boundary
+- Added focused JUnit source; Android Gradle/JUnit has not been run. Full Android build, Room runtime, backup round-trip, CI, signing and device acceptance remain unverified.
+
+---
+
+## [2.1.21] - 2026-11-24
+
+### Added — full question version comparison
+- Replaced the core-field-only change summary with a structured comparison of the saved snapshot against the current question content.
+- The comparison covers scalar question metadata, prompt/answer/explanation, source references, tags, options, LaTeX, ordered rich-content blocks, multipart fields and collection membership. Array items with stable IDs are matched by ID rather than display position.
+- Version history displays the changed field path and truncated before/current values. Embedded media payloads are represented by size-only summaries so image data is not printed into the history UI.
+- Review logs, scheduling state and FSRS memory remain outside content snapshots and are not modified by comparison or restore.
+
+### Data compatibility
+- App version 2.1.21 / versionCode 25. Room remains schema 15 and JSON backup remains schema 15; no database migration or backup-format change was required.
+- Existing version snapshots remain readable. The diff uses fields already stored in snapshots and treats absent legacy fields as absent rather than overwriting them.
+- Added a JVM JSON test dependency for version-diff tests. The existing app ID, signing alias, signing secret names and original `StudyForge_Plan.txt` are unchanged.
+
+### Verification boundary
+- Static release consistency and migration/backup source checks are run locally; full Android Gradle/JUnit, Room runtime, backup round-trip, GitHub Actions, signed APK and device verification remain pending unless separately evidenced in `BUILD_STATUS.md`.
+- Actor identity attribution is not claimed: this local-only history records version number and timestamp, not which person made an edit. Adding multi-user/actor attribution would require an explicit identity model and is not inferred.
+
+---
+
+## [2.1.19] - 2026-11-24
+
+### Added — provenance and safer imports
+- Added per-question source title and source detail fields for textbooks, notes, documents, chapters, pages, sections and URLs. Source details are editable, searchable, shown with study-question metadata, included in CSV interchange, JSON backups and question-version snapshots.
+- Added additive Room migration 12→13. Existing question rows retain all content and receive empty source fields; no table rebuild or destructive fallback is used.
+- Added CSV and Anki TSV import preview before writing. The preview reports new rows, stable-ID updates, duplicate rows and invalid rows, shows sample questions and requires explicit confirmation before importing.
+- Added duplicate detection for repeated stable IDs, repeated prompt/answer pairs in the same file, and exact normalized prompt/answer duplicates already in the library. Duplicate rows are skipped rather than silently overwriting another question.
+- Added row-number diagnostics for missing required fields, oversized text fields, unsupported question types/status/difficulty and invalid MCQ/True-False options/answers. Existing schedules and review counters remain preserved for ID-matched updates; blank source fields in older CSV files do not erase saved provenance.
+
+### Data compatibility
+- App version 2.1.19 / versionCode 23.
+- Room schema 13; migration 12→13 adds `sourceTitle` and `sourceDetail` with empty defaults. Migrations 1→2 through 12→13 remain registered.
+- JSON backup schema 13 exports/imports provenance. Older backup schemas 1–12 remain supported; when an older backup is merged into an existing question, current provenance is preserved instead of being cleared. Question-version restore includes source metadata while preserving current scheduling/review state.
+- CSV gains optional `sourceTitle` and `sourceDetail` columns; older CSV/Anki formats remain accepted. JSON remains the complete backup format.
+- Original `StudyForge_Plan.txt`, app ID, fixed signing alias and signing-secret names are preserved.
+
+### Verification boundary
+- Executed locally: SQLite migration scripts 7→8 through 12→13 passed; schema-13 backup compatibility and release source checks passed; standalone Kotlin import harness passed 10 assertions. A parser-only Kotlin scan found no syntax diagnostics but is not a full Android compile.
+- Full Android Gradle/Compose/KSP/JUnit, Room runtime migration, Android backup/restore round-trip, GitHub Actions, signing continuity and physical-device acceptance remain unverified.
+
+---
+
+## [2.1.18] - 2026-11-24
+
+### Added — remaining V1/V2 workflows
+- Added simple-question CSV import/export with quoted commas, quotes, multiline fields, common header aliases and ID-based merges. Added Anki-compatible three-field TSV import/export (Front, Back, Tags).
+- Added True/False, exact-match Numerical and Anki-style Cloze question authoring and study workflows. True/False and Numerical questions can also be used in timed exams; Numerical grading is exact-match in this release.
+- Added multi-select library actions for bulk status and difficulty changes; expanded status choices to Draft, Unverified, Verified, Incorrect and Archived.
+- Added manual due-date actions (due now, tomorrow, in seven days) and scheduler reset. Reset preserves lifetime review counters and the review log.
+- Added collection-aware saved study-session filters; deleting a collection clears its reference from saved sessions.
+- Added persistent question content version snapshots, version history UI and restore. Restoring content preserves current review history and FSRS scheduling state.
+- Extended formatting shortcuts with underline and highlight markup; heading/bullet prefixes apply to all selected lines. The Markdown-like renderer displays the new styles.
+
+### Data compatibility
+- App version 2.1.18 / versionCode 22.
+- Room schema 12: migration 10→11 adds saved-session collection filtering; migration 11→12 adds indexed question-version history. Existing migrations 1→2 through 11→12 remain registered and additive.
+- JSON backup schema 12 exports/imports question versions and collection-aware study sessions; backup imports 1–12 remain supported. CSV/Anki are intentionally lightweight and do not replace full JSON backup.
+- Original `StudyForge_Plan.txt`, app ID, fixed signing alias and secret names are preserved.
+
+### Verification boundary
+- Focused local SQLite migration checks 7→8 through 11→12, schema-12 backup checks, release source checks, and standalone Kotlin harness checks for formatting, cloze parsing, CSV/Anki interchange, manual scheduling and collection-aware session filtering passed.
+- Kotlin parser scan reported no syntax diagnostics, but it is not a Gradle/Android compilation.
+- Full Android Gradle/Compose/KSP/JUnit, Room runtime migration, Android JSON backup/restore round-trip, GitHub Actions, signed APK/certificate continuity and physical-device acceptance remain unverified.
+
+---
+
 ## [2.1.8] - 2026-11-23
 
 ### Added — structured authoring and study-session workflows
@@ -341,3 +473,119 @@ All notable StudyForge changes are recorded here. Newest release first.
 ### Verification
 - Inspected uploaded GitHub Actions XML/HTML reports: 55 tests, 54 passed, 1 failed.
 - Corrected fixture source-inspected; full Gradle/JUnit rerun remains pending.
+
+
+## [2.1.14] — 2026-11-24
+
+- Added manual examiner-awarded partial credit for multipart exam answers, bounded by each part's configured points.
+- Retained automatic exact/alternative/numeric-tolerance marking as the default score.
+- Delayed exam review-history updates until final grading is confirmed, so adjusted scores determine the recorded outcome.
+- Added regression tests for manual award overrides, bounds, and invalid values.
+- App version 2.1.14 / versionCode 19. Room schema 9 and JSON backup schema 9 remain unchanged.
+- Whole-exam attempt history and persistent per-attempt analytics remain outstanding.
+
+
+## 2.1.15 — Persisted exam attempts and history
+
+- App version 2.1.15 / versionCode 20.
+- Room schema 10 adds `exam_attempts` with additive migration 9→10. The attempt record stores timestamps, duration, answered/marked counts, weighted points, percentage and a self-contained JSON snapshot of each question/part response and grading result.
+- Attempt history intentionally has no foreign key to the question library, so deleting or editing a question does not erase completed exam records.
+- Progress now shows saved exam count, average and best score, and the ten most recent attempts.
+- JSON backup schema 10 exports/imports attempt history. Import still accepts schemas 1–9; old backups do not delete existing attempt history.
+- Added pure exam-score aggregation tests, SQLite migration 9→10 regression script, and schema-10 backup fixture validation. GitHub Actions now runs the migration/backup scripts before Gradle unit tests.
+- Verification boundary: focused Python SQLite/JSON checks passed locally. Android Gradle/KSP/JUnit, Room runtime, full Android backup/restore round-trip, CI, signed APK/certificate continuity and device testing remain unverified.
+
+
+## [2.1.16] — Selection-aware editor formatting and exam analytics
+
+- App version 2.1.16 / versionCode 21. Room schema 10 and JSON backup schema 10 remain unchanged.
+- Replaced append-only formatting shortcuts with selection-aware Bold, Italic, Heading, Bullet and Code actions. Selected text is wrapped/prefixed; an empty selection inserts a placeholder and keeps it selected for immediate replacement.
+- Applied the formatting field to the question prompt, answer, explanation, plain-text/heading/list content blocks, and multipart prompt/answer/explanation fields.
+- Added median exam score, four score-distribution bands, and a recent-vs-previous five-attempt trend to Progress. Non-finite imported score values are safely normalized for analytics. Trend appears only when ten or more saved attempts are available.
+- Added pure Kotlin formatting regression tests and expanded FSRS-6 same-day short-term equation checks.
+- Local formatting helper harness: 5 assertions passed. Full Android Gradle/JUnit, Room runtime, backup round-trip, CI, signed APK and device verification remain pending.
+
+
+## [2.1.20] — 2026-11-24
+
+### Added
+- Added independent source-title and source-reference filters in the question library.
+- Added inclusive created-date and modified-date ranges using `YYYY-MM-DD`; invalid dates are rejected by the filter matcher rather than silently interpreted.
+- Saved filter presets now retain all source/date criteria, and JSON backups export/import the expanded preset fields.
+- Question version history now shows a core-field comparison summary against the current saved question. It is a summary, not a character-level diff.
+- Progress now reports scored-review accuracy by question type, excluding unscored review rows and retaining a separate bucket for deleted-question history.
+
+### Compatibility
+- Room schema 15; additive migrations 13→14 (source criteria) and 14→15 (created/modified date criteria). Earlier migrations remain registered.
+- JSON backup schema 15; importer continues accepting schemas 1–15. Older backups default new saved-filter fields to empty.
+- App version 2.1.20 / versionCode 24; workflow artifact labels updated.
+
+### Verification boundary
+- Exact SQLite migration scripts and static source/backup checks were run locally; results are recorded in `BUILD_STATUS.md`.
+- Android Gradle/Compose/KSP/JUnit, Room runtime migration, app-level backup/restore, GitHub Actions, signing continuity and physical-device acceptance remain unverified.
+
+
+## 2.1.23 — learner-revealed hint blocks
+
+- Added `HINT` as a supported structured content-block kind. Authors can add, edit, reorder and delete hint blocks in the question editor; existing content-block storage, question snapshots and JSON backup paths are reused.
+- During study, hint content is hidden behind a **Reveal hint** action and is displayed only after the learner chooses to reveal it. Hint reveal state is scoped to the current question in the active screen; it is not persisted as a review event.
+- No Room migration or JSON backup schema change: both remain version 15. Existing backups and unknown/older block kinds retain their prior behavior.
+- Added static release consistency checks and updated GitHub Actions artifact labels to 2.1.23.
+- Verification in this package: Python source-consistency and migration/backup smoke scripts are run locally and recorded in `BUILD_STATUS.md`. Android Gradle/JUnit, Room runtime, CI, signing and device acceptance are not claimed unless separately evidenced.
+
+
+## 2.1.24 — FSRS-6 reference-equation correction
+
+- Corrected long-term review transitions to calculate new stability from the pre-review difficulty, then calculate the updated difficulty separately from that same prior state, matching the py-fsrs FSRS-6 update order.
+- Corrected the FSRS memory-state lower bound from 0.1 to 0.001 in stability/retrievability/interval calculations, consistent with the upstream FSRS-6 reference implementation.
+- Added four-rating long-term reference-equation regression fixtures for Again, Hard, Good and Easy (S=10, D=5, elapsed=5 study days, desired retention 0.90, default 21 weights), plus a lower-bound case. Fixtures follow py-fsrs v6.0.0 equations; this does not certify full scheduler/API parity or StudyForge's distinct learning-step policy.
+- App version 2.1.24 / versionCode 28. Room schema 15 and JSON backup schema 15 remain unchanged; migrations 1→2 through 14→15 and backup imports 1–15 are retained.
+- Existing HINT blocks and all previously implemented features remain in source. Original `StudyForge_Plan.txt` and signing identity are preserved.
+- Android Gradle/JUnit, Room runtime, app backup/restore, GitHub Actions, signed APK and physical-device verification are not claimed without external evidence.
+
+## 2.1.24 — V2 verification continuation (2026-11-25)
+
+- Added Android instrumentation tests for current Room schema persistence across close/reopen and question-dependent cascade deletion.
+- Added AndroidX instrumentation test dependencies and an API 35 emulator step to GitHub Actions (`:app:connectedDebugAndroidTest`).
+- Extended the static V2 integrity gate to detect missing instrumentation source/dependencies/CI wiring.
+- These tests are added but not yet executed; no Android build, emulator, CI, historical migration-runtime, backup/restore, signing or device result is claimed.
+- Structured TABLE and GRAPH blocks now receive pre-save validation (row/column bounds, minimum graph points, exact numeric x,y pairs, and finite values), with regression test source added.
+
+
+## Unreleased V2 verification improvements (2026-11-25)
+
+- Added Room runtime instrumentation coverage for collection deletion cleanup and saved-filter/study-session preset references.
+- Added Android lint to the GitHub Actions verification pipeline and static integrity checks.
+- No app version, Room schema, backup schema, or signing identity changed.
+
+## 2026-11-25 continuation — consistent JSON backup snapshot
+
+- Changed JSON export to capture all 12 database-backed record groups (questions, collections, links, review logs, settings, saved filters, tags, content blocks, multipart parts, study-session presets, exam attempts and question versions) inside one Room transaction. JSON formatting and file writing happen after the transaction using the detached snapshot.
+- This prevents concurrent edits during export from producing a backup assembled from different database moments, such as a question from before an edit and its rich blocks or collection links from after it.
+- Added `tools/verify_backup_snapshot.py` and wired it into GitHub Actions and the current source-integrity gate. The static contract check passed locally. It does not replace Android runtime or real export/import testing.
+- No FSRS changes, version/versionCode bump, Room/backup schema change, migration, signing change or original blueprint edit.
+
+
+
+## 2026-11-25 — Library bulk collection membership
+
+- Added multi-select add-to-collection and remove-from-collection actions.
+- Validates target collections inside a Room transaction, snapshots previous content and collection membership for changed questions, and updates membership atomically.
+- Added a static source-contract verifier and CI gate. Android runtime/UI tests remain pending.
+- No FSRS, version, Room schema, JSON schema, migration, signing or original-plan changes.
+
+## 2026-11-25 — live saved-filter counts (FSRS excluded)
+
+- Saved Library filter presets now show a live matching-question count beside each chip. Counts are recalculated from the current question list and current collection links, so question edits, tag/status/difficulty changes and collection membership changes are reflected without persisting stale count values.
+- Added a pure `QuestionLibraryFilter.countMatches` helper and JUnit source for current-data recalculation and deleted-collection references. Added `tools/verify_live_smart_filters.py` to GitHub Actions and the current source-integrity gate; its static contract check passes locally.
+- This is a live-count improvement to existing saved-filter presets, not a separate Room-backed dynamic-collection type or a background auto-refresh service. Applying a preset still applies its saved criteria to the current Library data.
+- No FSRS source/tests, app version/versionCode, Room schema, JSON backup schema, migration, signing identity or original blueprint were changed. Android JUnit/UI runtime remains untested.
+
+
+
+## 2026-11-25 — saved study-session preset editing (FSRS excluded)
+
+- Added an Edit action to each saved study-session preset. The editor is prefilled with its saved name, question limit, collection, subject, chapter, tag, difficulty, exam, question type, status and performance filters; its mode and topic are restored before editing.
+- Updates target the original preset by stable ID, so changing its name updates that preset instead of creating a duplicate. Creating a new preset remains a separate action, and delete remains available.
+- Added `tools/verify_session_preset_edit.py` and wired it into CI and the source-integrity gate. This is a static source-contract check; Android Compose/JUnit runtime has not been run locally.
+- No FSRS files, app version, Room schema, backup schema, migrations, signing identity or original `StudyForge_Plan.txt` were changed.

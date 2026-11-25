@@ -49,7 +49,9 @@ data class QuestionEntity(
     @ColumnInfo(defaultValue = "0.0") val fsrsStability: Double = 0.0,
     @ColumnInfo(defaultValue = "0.0") val fsrsDifficulty: Double = 0.0,
     @ColumnInfo(defaultValue = "'Unrated'") val difficulty: String = "Unrated",
-    @ColumnInfo(defaultValue = "''") val exam: String = ""
+    @ColumnInfo(defaultValue = "''") val exam: String = "",
+    @ColumnInfo(defaultValue = "''") val sourceTitle: String = "",
+    @ColumnInfo(defaultValue = "''") val sourceDetail: String = ""
 )
 
 @Entity(tableName = "collections")
@@ -130,13 +132,21 @@ data class SavedFilterPresetEntity(
     val difficulty: String = "All",
     val exam: String = "",
     val performance: String = "All",
+    @ColumnInfo(defaultValue = "''") val sourceTitle: String = "",
+    @ColumnInfo(defaultValue = "''") val sourceDetail: String = "",
+    @ColumnInfo(defaultValue = "''") val createdAfter: String = "",
+    @ColumnInfo(defaultValue = "''") val createdBefore: String = "",
+    @ColumnInfo(defaultValue = "''") val updatedAfter: String = "",
+    @ColumnInfo(defaultValue = "''") val updatedBefore: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     fun toCriteria() = LibraryFilterCriteria(
         query = query, type = type, status = status, subject = subject,
         chapter = chapter, topic = topic, tag = tag, collectionId = collectionId,
-        difficulty = difficulty, exam = exam, performance = performance
+        difficulty = difficulty, exam = exam, performance = performance,
+        sourceTitle = sourceTitle, sourceDetail = sourceDetail, createdAfter = createdAfter,
+        createdBefore = createdBefore, updatedAfter = updatedAfter, updatedBefore = updatedBefore
     )
 
     companion object {
@@ -151,7 +161,9 @@ data class SavedFilterPresetEntity(
             status = criteria.status, subject = criteria.subject, chapter = criteria.chapter,
             topic = criteria.topic, tag = criteria.tag, collectionId = criteria.collectionId,
             difficulty = criteria.difficulty, exam = criteria.exam,
-            performance = criteria.performance, createdAt = createdAt, updatedAt = updatedAt
+            performance = criteria.performance, sourceTitle = criteria.sourceTitle, sourceDetail = criteria.sourceDetail,
+            createdAfter = criteria.createdAfter, createdBefore = criteria.createdBefore, updatedAfter = criteria.updatedAfter, updatedBefore = criteria.updatedBefore,
+            createdAt = createdAt, updatedAt = updatedAt
         )
     }
 }
@@ -214,9 +226,36 @@ data class StudySessionPresetEntity(
     @ColumnInfo(defaultValue = "'All'") val questionType: String = "All",
     @ColumnInfo(defaultValue = "'All'") val status: String = "All",
     @ColumnInfo(defaultValue = "'All'") val performance: String = "All",
+    @ColumnInfo(defaultValue = "''") val collectionId: String = "",
     val questionLimit: Int = 20,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "exam_attempts", indices = [Index("completedAt")])
+data class ExamAttemptEntity(
+    @PrimaryKey val id: String,
+    val startedAt: Long,
+    val completedAt: Long,
+    val durationSeconds: Int,
+    val questionCount: Int,
+    val answeredCount: Int,
+    val markedCount: Int,
+    val earnedPoints: Double,
+    val possiblePoints: Double,
+    val scorePercent: Double,
+    val itemsJson: String,
+    val label: String = "Timed exam"
+)
+
+
+@Entity(tableName = "question_versions", indices = [Index(value = ["questionId", "versionNumber"], unique = true)])
+data class QuestionVersionEntity(
+    @PrimaryKey val id: String,
+    val questionId: String,
+    val versionNumber: Int,
+    val savedAt: Long,
+    val snapshotJson: String
 )
 
 @Dao
@@ -224,7 +263,7 @@ interface StudyDao {
     @Query("SELECT * FROM questions ORDER BY updatedAt DESC")
     fun observeQuestions(): Flow<List<QuestionEntity>>
 
-    @Query("SELECT * FROM questions WHERE prompt LIKE '%' || :query || '%' OR subject LIKE '%' || :query || '%' OR chapter LIKE '%' || :query || '%' OR topic LIKE '%' || :query || '%' OR tagsCsv LIKE '%' || :query || '%' OR exam LIKE '%' || :query || '%' OR difficulty LIKE '%' || :query || '%' ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM questions WHERE prompt LIKE '%' || :query || '%' OR subject LIKE '%' || :query || '%' OR chapter LIKE '%' || :query || '%' OR topic LIKE '%' || :query || '%' OR tagsCsv LIKE '%' || :query || '%' OR exam LIKE '%' || :query || '%' OR difficulty LIKE '%' || :query || '%' OR sourceTitle LIKE '%' || :query || '%' OR sourceDetail LIKE '%' || :query || '%' ORDER BY updatedAt DESC")
     fun searchQuestions(query: String): Flow<List<QuestionEntity>>
 
     @Query("SELECT * FROM questions WHERE id = :id LIMIT 1")
@@ -238,6 +277,30 @@ interface StudyDao {
 
     @Query("DELETE FROM questions WHERE id = :id")
     suspend fun deleteQuestion(id: String)
+
+    @Query("SELECT * FROM question_versions WHERE questionId = :questionId ORDER BY versionNumber DESC")
+    fun observeQuestionVersions(questionId: String): Flow<List<QuestionVersionEntity>>
+
+    @Query("SELECT COALESCE(MAX(versionNumber), 0) + 1 FROM question_versions WHERE questionId = :questionId")
+    suspend fun nextQuestionVersion(questionId: String): Int
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertQuestionVersion(version: QuestionVersionEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertQuestionVersion(version: QuestionVersionEntity)
+
+    @Query("SELECT * FROM question_versions WHERE id = :id LIMIT 1")
+    suspend fun getQuestionVersionById(id: String): QuestionVersionEntity?
+
+    @Query("SELECT * FROM question_versions WHERE questionId = :questionId AND versionNumber = :versionNumber LIMIT 1")
+    suspend fun getQuestionVersionByNumber(questionId: String, versionNumber: Int): QuestionVersionEntity?
+
+    @Query("SELECT * FROM question_versions")
+    suspend fun getAllQuestionVersions(): List<QuestionVersionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertQuestionVersions(versions: List<QuestionVersionEntity>)
 
     @Query("UPDATE questions SET reviewCount = :reviewCount, lastReviewedAt = :reviewedAt, dueAt = :dueAt, intervalDays = :intervalDays, easeFactor = :easeFactor, repetitions = :repetitions, lapseCount = :lapseCount, learningState = :learningState, learningStepIndex = :learningStepIndex, correctCount = :correctCount, incorrectCount = :incorrectCount, fsrsStability = :fsrsStability, fsrsDifficulty = :fsrsDifficulty WHERE id = :id")
     suspend fun updateReviewSchedule(
@@ -304,6 +367,18 @@ interface StudyDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReviewLogs(logs: List<ReviewLogEntity>)
+
+    @Query("SELECT * FROM exam_attempts ORDER BY completedAt DESC")
+    fun observeExamAttempts(): Flow<List<ExamAttemptEntity>>
+
+    @Query("SELECT * FROM exam_attempts ORDER BY completedAt DESC")
+    suspend fun getAllExamAttempts(): List<ExamAttemptEntity>
+
+    @Upsert
+    suspend fun upsertExamAttempt(attempt: ExamAttemptEntity)
+
+    @Upsert
+    suspend fun upsertExamAttempts(attempts: List<ExamAttemptEntity>)
 
     @Query("SELECT * FROM tags ORDER BY name COLLATE NOCASE")
     fun observeTags(): Flow<List<TagEntity>>
@@ -390,11 +465,14 @@ interface StudyDao {
     @Query("DELETE FROM study_session_presets WHERE id = :id")
     suspend fun deleteStudySessionPreset(id: String)
 
+    @Query("UPDATE study_session_presets SET collectionId = '' WHERE collectionId = :collectionId")
+    suspend fun clearStudySessionCollection(collectionId: String)
+
 }
 
 @Database(
-    entities = [QuestionEntity::class, CollectionEntity::class, QuestionCollectionCrossRef::class, ReviewLogEntity::class, StudySettingsEntity::class, SavedFilterPresetEntity::class, TagEntity::class, QuestionContentBlockEntity::class, QuestionPartEntity::class, StudySessionPresetEntity::class],
-    version = 9,
+    entities = [QuestionEntity::class, CollectionEntity::class, QuestionCollectionCrossRef::class, ReviewLogEntity::class, StudySettingsEntity::class, SavedFilterPresetEntity::class, TagEntity::class, QuestionContentBlockEntity::class, QuestionPartEntity::class, StudySessionPresetEntity::class, ExamAttemptEntity::class, QuestionVersionEntity::class],
+    version = 15,
     exportSchema = false
 )
 abstract class StudyDatabase : RoomDatabase() {
@@ -475,13 +553,58 @@ abstract class StudyDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Deliberately no FK to questions: historical attempts remain available
+                // even if a question is later removed from the active library.
+                db.execSQL("CREATE TABLE IF NOT EXISTS exam_attempts (id TEXT NOT NULL, startedAt INTEGER NOT NULL, completedAt INTEGER NOT NULL, durationSeconds INTEGER NOT NULL, questionCount INTEGER NOT NULL, answeredCount INTEGER NOT NULL, markedCount INTEGER NOT NULL, earnedPoints REAL NOT NULL, possiblePoints REAL NOT NULL, scorePercent REAL NOT NULL, itemsJson TEXT NOT NULL, label TEXT NOT NULL, PRIMARY KEY(id))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_exam_attempts_completedAt ON exam_attempts(completedAt)")
+            }
+        }
+
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE study_session_presets ADD COLUMN collectionId TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS question_versions (id TEXT NOT NULL, questionId TEXT NOT NULL, versionNumber INTEGER NOT NULL, savedAt INTEGER NOT NULL, snapshotJson TEXT NOT NULL, PRIMARY KEY(id))")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_question_versions_questionId_versionNumber ON question_versions(questionId, versionNumber)")
+            }
+        }
+
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE questions ADD COLUMN sourceTitle TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE questions ADD COLUMN sourceDetail TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE saved_filter_presets ADD COLUMN sourceTitle TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE saved_filter_presets ADD COLUMN sourceDetail TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE saved_filter_presets ADD COLUMN createdAfter TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE saved_filter_presets ADD COLUMN createdBefore TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE saved_filter_presets ADD COLUMN updatedAfter TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE saved_filter_presets ADD COLUMN updatedBefore TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile private var INSTANCE: StudyDatabase? = null
         fun get(context: Context): StudyDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(
                 context.applicationContext,
                 StudyDatabase::class.java,
                 "studyforge.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { INSTANCE = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15).build().also { INSTANCE = it }
         }
     }
 }

@@ -16,6 +16,18 @@ class QuestionAuthoringRulesTest {
         assertNotNull(QuestionAuthoringRules.validateParts(listOf(QuestionPartEntity("p", "q", 0, "p", "a", points = Double.NaN))))
     }
 
+    @Test fun validatesStructuredTableAndGraphBlocksBeforeSave() {
+        val badTable = QuestionContentBlockEntity("table", "q", 0, "TABLE", "")
+        assertTrue(QuestionAuthoringRules.validateBlocks(listOf(badTable))!!.contains("Table block"))
+        val badGraph = QuestionContentBlockEntity("graph", "q", 0, "GRAPH", "1,2\n3,no")
+        assertTrue(QuestionAuthoringRules.validateBlocks(listOf(badGraph))!!.contains("Graph block"))
+        val valid = listOf(
+            badTable.copy(text = "x|y\n1|2"),
+            badGraph.copy(text = "0,1\n1,2")
+        )
+        assertEquals(null, QuestionAuthoringRules.validateBlocks(valid))
+    }
+
     @Test fun normalizesBlockOrderAndPreservesUnknownKinds() {
         val blocks = listOf(
             QuestionContentBlockEntity("b1", "old", 9, "future-kind", "one", mediaBase64 = "YWJj", mediaMimeType = "image/png", altText = "sample"),

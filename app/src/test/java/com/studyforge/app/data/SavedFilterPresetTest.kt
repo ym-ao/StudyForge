@@ -11,7 +11,9 @@ class SavedFilterPresetTest {
             query = "centripetal", type = "MCQ", status = "Verified",
             subject = "Physics", chapter = "Circular Motion", topic = "Acceleration",
             tag = "MDCAT", collectionId = "collection-123", difficulty = "Hard",
-            exam = "MDCAT 2027", performance = "Weak"
+            exam = "MDCAT 2027", performance = "Weak",
+            sourceTitle = "Biology Textbook", sourceDetail = "Chapter 4 page 82",
+            createdAfter = "2026-01-01", createdBefore = "2026-10-31", updatedAfter = "2026-02-01", updatedBefore = "2026-11-01"
         )
         val saved = SavedFilterPresetEntity.fromCriteria(
             id = "preset-1", name = "  Hard Physics  ", criteria = criteria,
