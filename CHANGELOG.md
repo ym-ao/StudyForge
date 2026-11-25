@@ -593,3 +593,11 @@ All notable StudyForge changes are recorded here. Newest release first.
 ## 2.1.24 — CI compile fix (2026-11-25)
 
 - Added the missing Jetpack Compose `Box` layout import to `StudyScreens.kt`, resolving the reported unresolved-reference source defect. Android CI rerun is pending; no release version bump.
+
+
+## 2.1.24 — CI unit-test follow-up (2026-11-25)
+
+- Fixed multipart grading so invalid manual awards fall back to automatic answer marking.
+- Preserved first-seen review order in question-type analytics.
+- Corrected three unit-test fixtures that had asserted invalid scenarios incorrectly; added explicit acceptance coverage for a valid MCQ import.
+- Full Android unit-test rerun is pending GitHub Actions.

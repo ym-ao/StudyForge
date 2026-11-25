@@ -25,7 +25,10 @@ object MultipartExamRules {
     /** Returns an examiner-awarded score bounded to the part's configured positive points. */
     fun earnedPoints(part: QuestionPartEntity, response: String, manualAward: Double? = null): Double {
         val maximum = part.points.takeIf { it.isFinite() && it > 0.0 } ?: return 0.0
-        if (manualAward != null) return if (manualAward.isFinite()) manualAward.coerceIn(0.0, maximum) else 0.0
+        if (manualAward != null && manualAward.isFinite()) {
+            return manualAward.coerceIn(0.0, maximum)
+        }
+        // Invalid examiner input must not suppress deterministic automatic marking.
         return if (isCorrect(part, response)) maximum else 0.0
     }
 

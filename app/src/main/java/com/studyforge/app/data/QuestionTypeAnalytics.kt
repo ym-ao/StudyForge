@@ -8,10 +8,15 @@ object QuestionTypeAnalytics {
 
     fun summarize(questions: List<QuestionEntity>, logs: List<ReviewLogEntity>): List<Summary> {
         val typeById = questions.associate { it.id to it.type.ifBlank { "Unspecified" } }
-        return logs.asSequence()
-            .filter { it.wasCorrect != null }
-            .groupBy { typeById[it.questionId] ?: "Deleted question" }
-            .map { (type, entries) -> Summary(type, entries.size, entries.count { it.wasCorrect == true }) }
-            .sortedWith(compareByDescending<Summary> { it.scored }.thenBy { it.type })
+        // Preserve first-seen review order so the analytics list is stable and
+        // deleted-question history remains in its natural position.
+        val grouped = linkedMapOf<String, MutableList<ReviewLogEntity>>()
+        logs.asSequence().filter { it.wasCorrect != null }.forEach { log ->
+            val type = typeById[log.questionId] ?: "Deleted question"
+            grouped.getOrPut(type) { mutableListOf() }.add(log)
+        }
+        return grouped.map { (type, entries) ->
+            Summary(type, entries.size, entries.count { it.wasCorrect == true })
+        }
     }
 }

@@ -78,9 +78,11 @@ class QuestionInterchangeTest {
         val invalidType = QuestionInterchange.previewCsv("type,prompt,answer\nEssay,Question,Answer", emptyList())
         assertEquals(0, invalidType.rows.size)
         assertTrue(invalidType.issues.single().message.contains("Unsupported question type"))
-        val invalidMcq = QuestionInterchange.previewCsv("type,prompt,answer,options\nMCQ,Question,A,A | B", emptyList())
+        val invalidMcq = QuestionInterchange.previewCsv("type,prompt,answer,options\nMCQ,Question,A,B | C", emptyList())
         assertEquals(0, invalidMcq.rows.size)
         assertTrue(invalidMcq.issues.single().message.contains("MCQ/True-False"))
+        val validMcq = QuestionInterchange.previewCsv("type,prompt,answer,options\nMCQ,Question,A,A | B", emptyList())
+        assertEquals(1, validMcq.rows.size)
     }
 
     @Test fun rejectsQuoteInsideUnquotedField() {

@@ -573,3 +573,10 @@ Reference implementation: `https://github.com/open-spaced-repetition/py-fsrs/blo
 - Added the missing `Box` import only. The two composable-context diagnostics are expected to be cascading errors from the unresolved `Box` call; they must be confirmed gone by the next GitHub Actions compile.
 - No runtime behavior, scheduler logic, app version/versionCode, Room schema, JSON backup schema, migrations, signing configuration or original plan changed.
 - Verification boundary: source/import inspection completed locally. A full Android Gradle compile/lint/JUnit run has not been executed here; rerun GitHub Actions to confirm compilation and reveal any subsequent independent errors.
+
+
+## 2026-11-25 — Triage of five GitHub unit-test failures
+
+Reviewed the CI report (`141 tests completed, 5 failed`) and traced each failure to source or fixture behavior. Fixed two production issues: invalid/non-finite manual multipart awards now fall back to automatic marking, and question-type analytics preserve first-seen review group order. Corrected three test-fixture defects without weakening product validation: invalid MCQ now has an answer absent from its options (plus a valid-MCQ acceptance assertion); tag deduplication fixture now contains the duplicate tag; heading test now uses an actual newline rather than an escaped literal sequence.
+
+Targeted Kotlin smoke checks passed across multipart grading, CSV/MCQ preview, question-type analytics, tag operations, and heading formatting. The pinned FSRS-6 golden diagnostic and V2 source/release verifiers also passed. Full Android Gradle/JUnit verification remains pending in GitHub Actions.

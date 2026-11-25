@@ -17,7 +17,7 @@ class TagTextTest {
     }
 
     @Test fun addTrimsAndDeduplicatesCaseInsensitively() {
-        assertEquals("Physics, MDCAT", TagText.add("Physics", " mdcAT "))
+        assertEquals("Physics, MDCAT", TagText.add("Physics, MDCAT", " mdcAT "))
         assertEquals("Physics, MDCAT", TagText.add("Physics", " MDCAT "))
     }
 

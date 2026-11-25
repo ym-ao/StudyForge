@@ -289,3 +289,16 @@ Official FSRS-6 upstream reference vectors, full smart-collection/bulk workflows
 - The corrected project source used `Box` in the saved-session dialog but lacked `import androidx.compose.foundation.layout.Box`. Added that import.
 - This is a targeted compile-source fix; no production logic or version/schema/signing metadata changed. The next GitHub Actions run is required to verify that the cascading composable errors disappear and to identify any further compiler errors.
 - Not claimed as fixed by a successful Android build: Gradle/Android compile, lint, JUnit, emulator and device tests remain pending until CI is rerun.
+
+
+## 2026-11-25 — GitHub Actions unit-test failure follow-up
+
+The first Android CI run after the missing Compose `Box` import fix completed 141 unit tests and reported 5 failures. The five failures were reviewed individually:
+
+- `MultipartExamRulesTest.invalidManualAwardFallsBackToAutomaticMarking`: production defect. Non-finite manual awards (`NaN`, positive/negative infinity) previously returned zero instead of falling back to automatic marking. Fixed in `MultipartExamRules.earnedPoints`; finite manual awards remain clamped to `[0, part.points]`.
+- `QuestionInterchangeTest.previewRejectsUnsupportedTypesAndInvalidMcqOptions`: the invalid-MCQ fixture was actually valid (`answer=A`, options `A | B`). Corrected the fixture to options `B | C` and added a valid-MCQ acceptance assertion. Import validation logic was not weakened.
+- `QuestionTypeAnalyticsTest.accuracyUsesOnlyScoredReviewsAndGroupsByCurrentQuestionType`: production ordering defect. Analytics now preserves first-seen review-log group order instead of alphabetically reordering ties. Scoring still excludes unscored logs and groups using the current question type.
+- `TagTextTest.addTrimsAndDeduplicatesCaseInsensitively`: the first fixture attempted to assert deduplication without including the existing `MDCAT` tag. Corrected the fixture to include that existing tag; implementation remains case-insensitive and preserves existing spelling.
+- `TextFormattingRulesTest.headingPrefixesCurrentLineAndPreservesCaret`: the fixture used a literal backslash-plus-`n` instead of an actual newline. Corrected the test input/expected value to use an actual newline; production formatting behavior is unchanged.
+
+Validation in this environment: targeted Kotlin smoke harness passed for the five affected areas; `verify_release_2_1_24.py`, `verify_v2_source_integrity.py`, and the pinned FSRS-6 diagnostic passed. A full Gradle/JUnit run has NOT been executed locally (Gradle is unavailable here). The next GitHub Actions run is required to confirm the complete 141-test suite.

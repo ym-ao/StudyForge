@@ -19,8 +19,8 @@ class TextFormattingRulesTest {
     }
 
     @Test fun headingPrefixesCurrentLineAndPreservesCaret() {
-        val result = TextFormattingRules.apply("first\\nsecond", 8, 8, "HEADING")
-        assertEquals("first\\n## second", result.text)
+        val result = TextFormattingRules.apply("first\nsecond", 8, 8, "HEADING")
+        assertEquals("first\n## second", result.text)
         assertEquals(11, result.selectionStart)
         assertEquals(11, result.selectionEnd)
     }
