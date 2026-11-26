@@ -1,3 +1,11 @@
+## 2026-11-27 — V3.1 Batch 7 CI failure follow-up
+
+- Inspected GitHub Actions run 45899413233: all Python gates and Android lint passed; JUnit failed 2 of 169 tests, skipping emulator and APK steps.
+- Fixed two confirmed numerical regressions: parsed response units were ignored by attempt grading, and binary floating-point ties-to-even caused an expected half-up decimal-format mismatch.
+- Added unit suffix/conversion/override regression assertions. Formatting now uses `BigDecimal` with `RoundingMode.HALF_UP` and plain trimmed output.
+- Focused gates passed: engine 11/11, integration 10/10, MCQ 11/11, exam-history 7/7, Study MCQ 10/10. Kotlin 1.9.0 compilation passed and a 7-assertion runtime harness passed.
+- Full workflow rerun, Android JUnit, Room instrumentation, emulator, APK and device testing remain pending. No Room/backup schema, app version, FSRS, signing, or original plan changes.
+
 ## 2026-11-26 — V3.0 Batch 7: lazy rich-content hydration and scale diagnostics
 
 - Removed root full-table rich-content block and multipart-part observers. Study loads only the active card's blocks; Exam loads parts only for the bounded active queue snapshot and waits for successful hydration before starting.

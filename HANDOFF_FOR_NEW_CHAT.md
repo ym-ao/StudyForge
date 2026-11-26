@@ -14,8 +14,19 @@ The user requested the next update after V3.1 Batch 6. Continue from this exact 
 - Added `verify_v31_exam_history_review.py` to CI.
 - Batch 7 adds `verify_v31_study_mcq_flow.py` (10 checks) to protect the existing Study numerical MCQ path: verified-template gating, stable queue/question seed, selectable choices, answer-required check, tolerance-aware grading, generated answer/explanation feedback, state reset, and distractor tolerance separation.
 
+## Batch 7 CI failure investigation and focused fixes (2026-11-27)
+- Inspected GitHub Actions run `45899413233` for commit `b5926fb72ce2990a476565bdef5c2e843f10e3da`. All Python regression checks and Android lint passed; `:app:testDebugUnitTest` failed (169 tests, 2 failures), so emulator tests and APK tasks were skipped.
+- Failures: `NumericalTemplateAttemptRulesTest.gradingUsesAttemptVariantAndUnits` and `NumericalTemplateEngineTest.formattingSupportsDecimalPlacesAndSignificantFigures`.
+- Root cause 1: `NumericalTemplateEngine.isCorrect` ignored a unit suffix parsed from the learner's response when no separate `responseUnit` argument was supplied. Thus a response such as `5.0 s` could be interpreted as the template's `m` unit.
+- Root cause 2: binary floating-point + `kotlin.math.round` used ties-to-even for decimal formatting; `12.345` at two decimal places could render as `12.34` instead of the expected `12.35`.
+- Fixed response-unit precedence: explicit `responseUnit`, then parsed response suffix, then template unit only when no unit was supplied.
+- Fixed numeric formatting with `BigDecimal` + `RoundingMode.HALF_UP`, retaining trimmed plain-string output for decimal places and significant figures.
+- Extended the attempt-rule test for `500 cm` conversion and explicit-unit conflict.
+- Focused verification after fixes: numerical engine 11/11; numerical integration 10/10; numerical MCQ 11/11; exam-history review 7/7; Study MCQ flow 10/10. Engine + attempt helper compile with Kotlin 1.9.0; a standalone regression harness passed 7 assertions (correct/incorrect units, conversion, explicit-unit conflict, positive/negative half-up rounding, significant figures).
+- GitHub Actions has not yet been rerun on these fixes. Android Gradle/JUnit, Room instrumentation, emulator, APK and physical-device verification are still pending.
+
 ## Verification and limits
-- 38/38 Python checks currently wired into GitHub Actions passed locally; MCQ verifier 11/11; exam-history verifier 7/7.
+- The handoff's prior baseline was 38/38 Python checks; focused post-fix verifiers listed above pass. Do not claim the entire workflow suite was rerun after the source fix.
 - Numerical engine + attempt seed helper compiled independently with Kotlin 1.9.0.
 - Android Gradle/Compose compilation, JUnit, Room instrumentation, emulator, APK and physical-device tests remain pending. Do not claim Android compilation or phone verification.
 - Study seed is reconstructed from the active queue fingerprint + question ID. Exam seed is reconstructed from the saved exam start timestamp + question ID; completed Exam snapshots persist seed, generated prompt, expected answer and template version. No new persistent in-progress Study attempt table was added.

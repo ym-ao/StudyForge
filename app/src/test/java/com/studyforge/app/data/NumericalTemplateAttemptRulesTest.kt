@@ -30,5 +30,7 @@ class NumericalTemplateAttemptRulesTest {
     @Test fun gradingUsesAttemptVariantAndUnits() {
         assertTrue(NumericalTemplateAttemptRules.isCorrect(template, "attempt-123", "question-a", "5.0 m"))
         assertFalse(NumericalTemplateAttemptRules.isCorrect(template, "attempt-123", "question-a", "5.0 s"))
+        assertTrue(NumericalTemplateAttemptRules.isCorrect(template, "attempt-123", "question-a", "500 cm"))
+        assertFalse(NumericalTemplateAttemptRules.isCorrect(template, "attempt-123", "question-a", "500 cm", "s"))
     }
 }

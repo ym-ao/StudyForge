@@ -1,6 +1,7 @@
 package com.studyforge.app.data
 
-import java.util.Locale
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.Random
 import kotlin.math.abs
 import kotlin.math.pow
@@ -111,7 +112,10 @@ object NumericalTemplateEngine {
     fun isCorrect(template: Template, variant: Variant, response: String, responseUnit: String = ""): Boolean {
         if (response.isBlank()) return false
         val parsed = parseNumber(response) ?: return false
-        val converted = UnitRegistry.convert(parsed.first, responseUnit.ifBlank { template.answerUnit }, template.answerUnit) ?: return false
+        // Prefer an explicitly supplied unit; otherwise honor a unit embedded in the response.
+        // Fall back to the template unit only when the learner supplied no unit at all.
+        val suppliedUnit = responseUnit.ifBlank { parsed.second }
+        val converted = UnitRegistry.convert(parsed.first, suppliedUnit.ifBlank { template.answerUnit }, template.answerUnit) ?: return false
         val allowed = maxOf(template.absoluteTolerance, abs(variant.answer) * template.relativeTolerance)
         if (abs(converted - variant.answer) <= allowed) return true
         return template.acceptedEquivalentExpressions.any { expression ->
@@ -152,13 +156,12 @@ object NumericalTemplateEngine {
     fun format(value: Double, decimalPlaces: Int, significantFigures: Int): String {
         require(value.isFinite()) { "Cannot format a non-finite number." }
         val rounded = if (significantFigures > 0 && value != 0.0) {
-            val scale = 10.0.pow(significantFigures - 1 - kotlin.math.floor(kotlin.math.log10(abs(value))).toInt())
-            kotlin.math.round(value * scale) / scale
+            val decimalScale = significantFigures - 1 - kotlin.math.floor(kotlin.math.log10(abs(value))).toInt()
+            BigDecimal.valueOf(value).setScale(decimalScale, RoundingMode.HALF_UP)
         } else {
-            val scale = 10.0.pow(decimalPlaces.coerceIn(0, 10))
-            kotlin.math.round(value * scale) / scale
+            BigDecimal.valueOf(value).setScale(decimalPlaces.coerceIn(0, 10), RoundingMode.HALF_UP)
         }
-        return String.format(Locale.US, "%s", rounded).let { if (it.endsWith(".0")) it.dropLast(2) else it }
+        return rounded.stripTrailingZeros().toPlainString()
     }
 
     fun deterministicDistractors(answer: Double, seed: Long, count: Int = 3, tolerance: Double = 0.0): List<Double> {
