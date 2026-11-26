@@ -20,6 +20,7 @@ app_gradle = read("app/build.gradle.kts")
 database = read("app/src/main/java/com/studyforge/app/data/StudyDatabase.kt")
 app_ui = read("app/src/main/java/com/studyforge/app/ui/StudyForgeApp.kt")
 workflow = read(".github/workflows/android-apk.yml")
+cloze_verifier = read("tools/verify_cloze_reimplementation.py")
 room_runtime_test = read("app/src/androidTest/java/com/studyforge/app/data/StudyDatabaseRuntimeTest.kt")
 authoring_rules = read("app/src/main/java/com/studyforge/app/data/QuestionAuthoringRules.kt")
 content_parser_tests = read("app/src/test/java/com/studyforge/app/data/ContentBlockParsingTest.kt")
@@ -67,6 +68,7 @@ assert '.put("schemaVersion", 15)' in app_ui, "JSON export schema is not 15"
 assert re.search(r"schemaVersion\s+in\s+1\.\.15", app_ui), "JSON importer must accept schemas 1..15"
 
 # The workflow must run current checks, not a stale historical verifier.
+assert "python3 tools/verify_cloze_reimplementation.py" in workflow
 assert "python3 tools/verify_release_2_1_24.py" in workflow
 assert "python3 tools/verify_v2_source_integrity.py" in workflow
 assert "verify_release_2_1_23.py" not in workflow
@@ -160,6 +162,8 @@ print("PASS: current CI verifier, migration checks, artifacts, and signing contr
 print("PASS: Room Android instrumentation tests and emulator CI execution are wired")
 print("PASS: CI runs Android lint before unit and emulator tests")
 print("PASS: CSV/TSV parser rejects malformed quote placement and has regression coverage")
+assert "bounded Cloze parser" in cloze_verifier and "clozeQuestionCanBeVersionedAndAddedToCollection" in cloze_verifier
+print("PASS: Cloze parser/import/version/collection regression checks are wired into CI")
 print("PASS: structured table/graph authoring validation and regression tests are present")
 print("PASS: imported image Base64 is validated against the 1.5 MB editor limit")
 print("PASS: Progress screen displays recorded 14-day review activity and streak analytics")

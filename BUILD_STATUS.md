@@ -332,3 +332,7 @@ Validation in this environment: targeted Kotlin smoke harness passed for the fiv
 - Added `tools/verify_study_ui_performance.py` and wired it into CI plus `verify_v2_source_integrity.py`.
 - No FSRS source/test changes, Room migration, backup-schema change, version bump, signing change, APK build or release. Identity remains 2.1.24/versionCode 28, Room 15, JSON backup 15; original `StudyForge_Plan.txt` remains unchanged.
 - Verification boundary: static source checks can run locally. Android Gradle/Compose compilation, Android unit tests, runtime crash reproduction and physical-device acceptance still require CI/device execution. A crash log is still needed to identify the precise original exception.
+
+## 2026-11-26 — Cloze reimplementation source check (unreleased)
+
+The Cloze source implementation has been replaced with the bounded scanner described in `CLOZE_REIMPLEMENTATION_AUDIT.md`. Standalone Kotlin harnesses passed: 7 parser/rendering checks and 5 CSV interchange checks. Current source-contract verification scripts passed, including the new Cloze verifier and the bulk-collection verifier. A Room Android instrumentation regression now exercises a Cloze question through question-version creation and collection assignment, but it has not been executed locally. Gradle and Android SDK are not installed in this environment, so no Android APK was built and no device crash was reproduced. Treat this as source-ready for CI, not as a verified release or confirmed phone-crash fix.

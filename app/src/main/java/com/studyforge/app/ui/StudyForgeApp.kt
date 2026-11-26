@@ -208,36 +208,42 @@ fun StudyForgeApp(database: StudyDatabase) {
             } },
             onSave = { question, selectedCollections, contentBlocks, questionParts ->
                 scope.launch {
-                    database.withTransaction {
-                        val old = dao.getQuestion(question.id)
-                        if (old != null) {
-                            val oldBlocks = dao.getContentBlocks(question.id)
-                            val oldParts = dao.getQuestionParts(question.id)
-                            val oldCollectionIds = dao.getCollectionIds(question.id)
-                            val changed = old.copy(updatedAt = question.updatedAt) != question || oldBlocks != contentBlocks || oldParts != questionParts || oldCollectionIds.toSet() != selectedCollections.toSet()
-                            if (changed) {
-                                dao.insertQuestionVersion(QuestionVersionEntity(
-                                    id = UUID.randomUUID().toString(), questionId = question.id,
-                                    versionNumber = dao.nextQuestionVersion(question.id), savedAt = System.currentTimeMillis(),
-                                    snapshotJson = QuestionVersionRules.createSnapshot(old, oldBlocks, oldParts, oldCollectionIds)
-                                ))
+                    try {
+                        database.withTransaction {
+                            val validCollectionIds = dao.getAllCollections().map { it.id }.toSet()
+                            val safeSelectedCollections = selectedCollections.distinct().filter { it in validCollectionIds }
+                            val old = dao.getQuestion(question.id)
+                            if (old != null) {
+                                val oldBlocks = dao.getContentBlocks(question.id)
+                                val oldParts = dao.getQuestionParts(question.id)
+                                val oldCollectionIds = dao.getCollectionIds(question.id)
+                                val changed = old.copy(updatedAt = question.updatedAt) != question || oldBlocks != contentBlocks || oldParts != questionParts || oldCollectionIds.toSet() != safeSelectedCollections.toSet()
+                                if (changed) {
+                                    dao.insertQuestionVersion(QuestionVersionEntity(
+                                        id = UUID.randomUUID().toString(), questionId = question.id,
+                                        versionNumber = dao.nextQuestionVersion(question.id), savedAt = System.currentTimeMillis(),
+                                        snapshotJson = QuestionVersionRules.createSnapshot(old, oldBlocks, oldParts, oldCollectionIds)
+                                    ))
+                                }
+                            }
+                            dao.upsertQuestion(question)
+                            dao.deleteContentBlocks(question.id)
+                            dao.deleteQuestionParts(question.id)
+                            val normalizedBlocks = QuestionAuthoringRules.normalizeBlocks(question.id, contentBlocks)
+                            val normalizedParts = QuestionAuthoringRules.normalizeParts(question.id, questionParts)
+                            if (normalizedBlocks.isNotEmpty()) dao.upsertContentBlocks(normalizedBlocks)
+                            if (normalizedParts.isNotEmpty()) dao.upsertQuestionParts(normalizedParts)
+                            dao.clearQuestionCollections(question.id)
+                            if (safeSelectedCollections.isNotEmpty()) {
+                                dao.insertLinks(safeSelectedCollections.map { QuestionCollectionCrossRef(question.id, it) })
                             }
                         }
-                        dao.upsertQuestion(question)
-                        dao.deleteContentBlocks(question.id)
-                        dao.deleteQuestionParts(question.id)
-                        val normalizedBlocks = QuestionAuthoringRules.normalizeBlocks(question.id, contentBlocks)
-                        val normalizedParts = QuestionAuthoringRules.normalizeParts(question.id, questionParts)
-                        if (normalizedBlocks.isNotEmpty()) dao.upsertContentBlocks(normalizedBlocks)
-                        if (normalizedParts.isNotEmpty()) dao.upsertQuestionParts(normalizedParts)
-                        dao.clearQuestionCollections(question.id)
-                        if (selectedCollections.isNotEmpty()) {
-                            dao.insertLinks(selectedCollections.map { QuestionCollectionCrossRef(question.id, it) })
-                        }
+                        editorOpen = false
+                        editorId = null
+                        snackbar.showSnackbar("Question saved to your library")
+                    } catch (error: Exception) {
+                        snackbar.showSnackbar("Could not save question: ${error.message ?: "database error"}")
                     }
-                    editorOpen = false
-                    editorId = null
-                    snackbar.showSnackbar("Question saved to your library")
                 }
             }
         )
@@ -391,28 +397,34 @@ fun StudyForgeApp(database: StudyDatabase) {
                     } },
                     onBulkCollection = { selected, collectionId, add -> scope.launch {
                         var changedCount = 0
-                        database.withTransaction {
-                            val validCollectionIds = dao.getAllCollections().map { it.id }.toSet()
-                            if (collectionId in validCollectionIds) {
-                                selected.forEach { selectedQuestion ->
-                                    val current = dao.getQuestion(selectedQuestion.id) ?: return@forEach
-                                    val oldIds = dao.getCollectionIds(current.id)
-                                    val newIds = CollectionMembershipRules.update(oldIds, collectionId, add)
-                                    if (newIds.toSet() != oldIds.toSet()) {
-                                        dao.insertQuestionVersion(QuestionVersionEntity(
-                                            id = UUID.randomUUID().toString(), questionId = current.id,
-                                            versionNumber = dao.nextQuestionVersion(current.id), savedAt = System.currentTimeMillis(),
-                                            snapshotJson = QuestionVersionRules.createSnapshot(current, dao.getContentBlocks(current.id), dao.getQuestionParts(current.id), oldIds)
-                                        ))
-                                        dao.clearQuestionCollections(current.id)
-                                        if (newIds.isNotEmpty()) dao.insertLinks(newIds.map { QuestionCollectionCrossRef(current.id, it) })
-                                        dao.upsertQuestion(current.copy(updatedAt = System.currentTimeMillis()))
-                                        changedCount++
+                        try {
+                            database.withTransaction {
+                                val validCollectionIds = dao.getAllCollections().map { it.id }.toSet()
+                                if (collectionId in validCollectionIds) {
+                                    selected.forEach { selectedQuestion ->
+                                        val current = dao.getQuestion(selectedQuestion.id) ?: return@forEach
+                                        val oldIds = dao.getCollectionIds(current.id)
+                                        // A legacy/stale link must not be re-inserted after the links are replaced.
+                                        val safeOldIds = oldIds.filter { it in validCollectionIds }
+                                        val newIds = CollectionMembershipRules.update(safeOldIds, collectionId, add)
+                                        if (newIds.toSet() != oldIds.toSet()) {
+                                            dao.insertQuestionVersion(QuestionVersionEntity(
+                                                id = UUID.randomUUID().toString(), questionId = current.id,
+                                                versionNumber = dao.nextQuestionVersion(current.id), savedAt = System.currentTimeMillis(),
+                                                snapshotJson = QuestionVersionRules.createSnapshot(current, dao.getContentBlocks(current.id), dao.getQuestionParts(current.id), oldIds)
+                                            ))
+                                            dao.clearQuestionCollections(current.id)
+                                            if (newIds.isNotEmpty()) dao.insertLinks(newIds.map { QuestionCollectionCrossRef(current.id, it) })
+                                            dao.upsertQuestion(current.copy(updatedAt = System.currentTimeMillis()))
+                                            changedCount++
+                                        }
                                     }
                                 }
                             }
+                            snackbar.showSnackbar(if (add) "Added $changedCount question(s) to collection" else "Removed $changedCount question(s) from collection")
+                        } catch (error: Exception) {
+                            snackbar.showSnackbar("Collection update failed: ${error.message ?: "database error"}")
                         }
-                        snackbar.showSnackbar(if (add) "Added $changedCount question(s) to collection" else "Removed $changedCount question(s) from collection")
                     } },
                     onEdit = { question -> scope.launch {
                         editorCollectionIds = dao.getCollectionIds(question.id)
@@ -1166,7 +1178,7 @@ private fun QuestionEditor(
             if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
             Text("Select text, then choose a formatting action. With no selection, a placeholder is inserted.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             SelectionFormattingField(prompt, { prompt = it; error = null }, "Question / Front", minLines = 3)
-            if (prompt.isNotBlank()) Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(10.dp)) { Text("Question preview", style = MaterialTheme.typography.labelSmall); RichContentText(prompt) } }
+            if (prompt.isNotBlank()) Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(10.dp)) { Text("Question preview", style = MaterialTheme.typography.labelSmall); RichContentText(if (type == "Cloze") ClozeRules.mask(prompt) else prompt) } }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Question type", fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.width(12.dp))

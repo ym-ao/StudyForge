@@ -45,8 +45,17 @@ Earlier FSRS mismatch notes below are historical and superseded by the latest st
 - Local static/migration/backup checks passed. This does not mean Android JUnit, Room runtime, GitHub Actions, signing or device acceptance passed.
 - No release version bump or database/backup schema change.
 
+## New V2 device incident — Cloze question crash (2026-11-26)
+
+- User reports the first Study-tab crash occurred when the study flow reached an imported Cloze question. Since then, opening Study crashes every time. The user also reports a crash when adding a Cloze question to a collection.
+- Treat this as a **critical V2 blocker**. Cloze import, rendering/reveal, study selection, collection membership, and version-snapshot paths require targeted regression coverage and physical-device reproduction before V2 acceptance.
+- The current source uses `ClozeRules` to mask/extract `{{cN::...}}` text, renders the masked prompt through `RichContentText`, and routes Cloze through the generic reveal-answer branch. Collection membership itself uses the shared question/collection link and version-snapshot flow. Source inspection alone does not identify the crash cause.
+- Existing `ClozeRulesTest` only covers basic masking/extraction and ordinary text. It does not cover Android Compose rendering, imported Cloze records, collection assignment, or study-session integration.
+- Do not mark Cloze fixed based on static checks. Obtain the Android crash stack trace (Logcat) and reproduce with a minimal Cloze-only database before changing behavior. Preserve FSRS and user data.
+
 ## Remaining V2 completion work
 
+0. Diagnose and fix the reported Cloze-triggered Study/collection crash; add pure-rule, import, Room/Compose and physical-device regression coverage. This is a critical blocker, not a V3 feature.
 1. Expand the now-passing pinned py-fsrs v6.0.0 fixture into broader upstream-suite coverage for edge cases and API/state-machine behavior; the current harness is a focused conformance set, not the entire upstream suite.
 2. Add Android Room instrumentation tests that migrate populated databases through the complete supported migration chain and verify data integrity.
 3. Add and run real app JSON export/import round-trip tests, including embedded media, review logs, collections, tags, saved presets, multipart content, exam attempts and question versions; include legacy backup fixtures.
@@ -190,10 +199,21 @@ The source now covers more of the original V1/V2 blueprint, but source implement
 - [~] Topic, subject and mistake-category analytics expanded from real review logs; question-type/skill analytics, progress-over-time and reliable time-spent metrics remain open.
 - [ ] Expanded migration, scheduler, backup round-trip, and exam tests.
 
-### Version 3.0 — Advanced question engine
+### Version 3.0 — Advanced question engine and scalable data architecture
 
-**Not started in the supplied source.**
+**Not started in the supplied source.** V3 begins only after V1/V2 acceptance, including resolution of the reported Cloze crash.
 
+**Database and Library scalability (formally added 2026-11-26):**
+- [ ] Adopt Room Paging 3 with DAO `PagingSource` queries and repository/ViewModel integration.
+- [ ] Load Library rows in bounded pages; fetch additional pages as the user scrolls instead of materializing the entire question table in UI memory.
+- [ ] Move search, subject/chapter/topic/tag/type/status/difficulty/exam/collection/performance filters and sorting into parameterized database queries where practical.
+- [ ] Keep collection membership filtering and ordering efficient with appropriate Room indexes and query plans; add migration only when schema/index changes are justified.
+- [ ] Keep Study sessions one-question-at-a-time and fetch the next eligible question incrementally, while preserving session ordering, limits, collection constraints, and FSRS scheduling semantics.
+- [ ] Render expensive math/rich content only for the active card or an explicitly opened preview; avoid creating math renderer views for off-screen Library rows.
+- [ ] Add large-library performance tests (including tens of thousands of questions), paging-boundary tests, search/filter correctness tests, and memory/UI responsiveness checks.
+- [ ] Preserve offline-first behavior, existing question IDs, review history, collection links, backups/import compatibility, and FSRS behavior throughout the migration.
+
+**Advanced question engine:**
 - [ ] Dynamic numerical questions and variable-based templates.
 - [ ] Bounded variables, constraints, randomization, and reproducible variants.
 - [ ] Deterministic answer calculation and automatic answer checking.

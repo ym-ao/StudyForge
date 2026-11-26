@@ -22,6 +22,23 @@ class QuestionVersionRulesTest {
         assertEquals("<not present>", changes["parts[id=p2].answer"]?.previous)
     }
 
+    @Test fun clozeQuestionSnapshotRestoresMarkersAndCollectionMembership() {
+        val source = QuestionEntity(
+            id = "cloze-1",
+            prompt = "The powerhouse is {{c1::mitochondrion::organelle}}.",
+            answer = "mitochondrion",
+            type = "Cloze"
+        )
+        val snapshot = QuestionVersionRules.createSnapshot(source, emptyList(), emptyList(), listOf("biology"))
+        val edited = source.copy(prompt = "Edited prompt", answer = "changed", type = "Flashcard")
+        val restored = QuestionVersionRules.restore(snapshot, edited)
+
+        assertEquals("Cloze", restored.question.type)
+        assertEquals(source.prompt, restored.question.prompt)
+        assertEquals("mitochondrion", restored.question.answer)
+        assertEquals(listOf("biology"), restored.collectionIds)
+    }
+
     @Test fun ignoresObjectKeyOrderAndSummarizesEmbeddedMediaWithoutExposingPayload() {
         val before = """{"contentBlocks":[{"id":"b1","mediaBase64":"YWJj","kind":"IMAGE"}]}"""
         val same = """{"contentBlocks":[{"kind":"IMAGE","mediaBase64":"YWJj","id":"b1"}]}"""

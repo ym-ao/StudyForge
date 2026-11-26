@@ -9,7 +9,9 @@ tests = (ROOT / "app/src/test/java/com/studyforge/app/data/CollectionMembershipR
 assert "onBulkCollection = { selected, collectionId, add -> scope.launch" in ui
 assert "val validCollectionIds = dao.getAllCollections().map { it.id }.toSet()" in ui
 assert "val oldIds = dao.getCollectionIds(current.id)" in ui
-assert "CollectionMembershipRules.update(oldIds, collectionId, add)" in ui
+assert "val safeOldIds = oldIds.filter { it in validCollectionIds }" in ui
+assert "CollectionMembershipRules.update(safeOldIds, collectionId, add)" in ui
+assert "Collection update failed:" in ui
 assert "fun update(existingIds: List<String>, collectionId: String, add: Boolean)" in rules
 for case in ("addAppendsWithoutDuplicatingAndPreservesExistingOrder", "addingExistingCollectionIsNoOp", "removeDeletesOnlyRequestedCollection", "removeMissingCollectionIsNoOp", "blankIdsAreIgnoredAndWhitespaceIsTrimmed"):
     assert case in tests, f"Missing collection membership regression case: {case}"
@@ -20,5 +22,6 @@ assert "dao.upsertQuestion(current.copy(updatedAt = System.currentTimeMillis()))
 assert "database.withTransaction" in ui
 assert 'Text("Add to collection")' in ui and 'Text("Remove from collection")' in ui
 assert "showBulkCollectionDialog" in ui and "Choose collection" in ui
-print("PASS: bulk collection add/remove validates targets, snapshots prior membership, and commits membership atomically")
+assert "clozeQuestionCanBeVersionedAndAddedToCollection" in (ROOT / "app/src/androidTest/java/com/studyforge/app/data/StudyDatabaseRuntimeTest.kt").read_text(encoding="utf-8")
+print("PASS: bulk collection add/remove validates targets, sanitizes stale links, snapshots prior membership, and commits atomically")
 print("PASS: pure membership rules cover duplicate, no-op, removal, whitespace and ordering cases")

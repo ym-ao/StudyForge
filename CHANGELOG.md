@@ -601,3 +601,11 @@ All notable StudyForge changes are recorded here. Newest release first.
 - Preserved first-seen review order in question-type analytics.
 - Corrected three unit-test fixtures that had asserted invalid scenarios incorrectly; added explicit acceptance coverage for a valid MCQ import.
 - Full Android unit-test rerun is pending GitHub Actions.
+
+## 2.1.24 V2 source hotfix work — Cloze stability (unreleased)
+
+- Replaced minimal regex Cloze parsing with a bounded parser for indexed deletions and hints.
+- Normalized/validated Cloze CSV import answers from source markers and updated editor/Study previews.
+- Hardened collection assignment and question save error handling.
+- Added Cloze, CSV, version snapshot, and Room collection runtime regression tests.
+- Not a release; app version and versionCode remain unchanged. Device/CI verification is pending.

@@ -1,3 +1,12 @@
+## 2026-11-26 — V3 roadmap addition and critical Cloze crash report
+
+- Formally added Room Paging 3/database-level pagination to Version 3.0 in `ROADMAP.md`: DAO `PagingSource`, repository/ViewModel, bounded Library pages, database-backed search/filter/sort, incremental Study queue, lazy math rendering, large-library tests, and preservation of offline-first data/FSRS semantics.
+- V3 remains not started until all V1/V2 acceptance gates pass.
+- New critical V2 device report: Study first crashed when reaching an imported Cloze question; now opening Study crashes every time. Adding a Cloze question to a collection also reportedly crashes.
+- Current source review: Cloze uses `ClozeRules` masking/extraction, `RichContentText` prompt rendering and the generic reveal-answer branch. Collection assignment uses shared collection-link/version-snapshot code. Existing Cloze unit tests cover only basic pure masking/extraction; no Android rendering/import/collection integration coverage exists. The precise root cause is not established.
+- Required next action: obtain the Android Logcat stack trace and reproduce with a minimal Cloze-only database; inspect Study rendering, import normalization, collection assignment and version snapshots. Treat this as a V2 blocker. Do not claim a fix without device verification. Preserve user data and FSRS behavior.
+- Original `StudyForge_Plan.txt` is intentionally unchanged. App identity remains 2.1.24/versionCode 28, Room 15, JSON backup 15; no release/version bump or schema change was made by this documentation update.
+
 ## CURRENT HANDOFF — FSRS-6 compatibility correction (2026-11-25)
 
 The pinned py-fsrs v6.0.0 compatibility mismatch has been corrected in source. Target reference is commit `352c7a2838071447fb1c55d9fbbbc04fa637ee81` (`fsrs/fsrs.py` and `tests/test_basic.py`), not the current upstream `main` branch.
@@ -482,3 +491,17 @@ The CI run progressed past Kotlin compilation and reported `141 tests completed,
 - Added `tools/verify_study_ui_performance.py`; included it in GitHub Actions and the V2 source-integrity gate.
 - No FSRS, Room schema, JSON schema, app version, signing or original plan changes. Current baseline remains app 2.1.24/versionCode 28, Room 15, backup 15. No APK was built or released.
 - Static source verification is not Android runtime verification. Run CI and test Study/Library on the phone. If the Study tab still crashes, capture the complete `FATAL EXCEPTION` section from logcat so the remaining root cause can be identified precisely.
+
+## Cloze crash investigation — 2026-11-26
+
+The user reported that Study crashes when reaching an imported Cloze question and that assigning a Cloze question to a collection also crashes. The current implementation has been reworked in an isolated source copy. Read `CLOZE_REIMPLEMENTATION_AUDIT.md` for the complete comparison.
+
+Changes in this source handoff:
+- Replaced regex-only Cloze parsing with a bounded scanner for `{{cN::answer}}` and `{{cN::answer::hint}}`.
+- Added per-index masking, hint extraction, and safe behavior for malformed/oversized text.
+- Validated Cloze markers during CSV preview and canonicalized the stored answer from the markers, matching the editor save behavior.
+- Masked Cloze syntax in the editor preview and cached Cloze rendering data in Study.
+- Hardened question-editor and bulk-collection save paths against stale collection IDs and unhandled database exceptions.
+- Added Cloze parser/import/version-history/Room collection assignment regression tests.
+
+Standalone Kotlin checks passed (7 Cloze checks and 5 CSV interchange checks). Android Gradle unit tests, Room instrumentation tests, and physical-device reproduction have not been run in this environment. Do not state that the device crash is fixed until GitHub Actions and a phone retest pass. No app version, Room schema, backup schema, FSRS implementation, signing configuration, or user data was changed.

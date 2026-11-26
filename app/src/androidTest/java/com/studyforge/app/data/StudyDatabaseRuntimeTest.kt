@@ -145,6 +145,41 @@ class StudyDatabaseRuntimeTest {
         assertEquals("0,1\n1,2", restored[4].text)
     }
 
+
+    @Test
+    fun clozeQuestionCanBeVersionedAndAddedToCollection() = runBlocking {
+        val dao = openDatabase().dao()
+        val question = QuestionEntity(
+            id = "cloze-collection-q",
+            prompt = "The powerhouse is {{c1::mitochondrion::organelle}} and it makes {{c2::ATP}}.",
+            answer = "mitochondrion; ATP",
+            type = "Cloze",
+            latex = "E = mc^2"
+        )
+        dao.upsertQuestion(question)
+        dao.upsertCollection(CollectionEntity("cloze-collection", "Cloze collection"))
+
+        val oldIds = dao.getCollectionIds(question.id)
+        val snapshot = QuestionVersionRules.createSnapshot(question, emptyList(), emptyList(), oldIds)
+        dao.insertQuestionVersion(QuestionVersionEntity(
+            id = "cloze-collection-version", questionId = question.id, versionNumber = 1,
+            savedAt = System.currentTimeMillis(), snapshotJson = snapshot
+        ))
+        val newIds = CollectionMembershipRules.update(oldIds, "cloze-collection", add = true)
+        dao.clearQuestionCollections(question.id)
+        dao.insertLinks(newIds.map { QuestionCollectionCrossRef(question.id, it) })
+        dao.upsertQuestion(question.copy(updatedAt = System.currentTimeMillis()))
+
+        assertEquals(listOf("cloze-collection"), dao.getCollectionIds(question.id))
+        val persisted = dao.getQuestion(question.id) ?: error("Cloze question was not persisted")
+        assertEquals("Cloze", persisted.type)
+        assertEquals(question.prompt, persisted.prompt)
+        assertEquals(listOf("cloze-collection-version"), dao.getAllQuestionVersions().map { it.id })
+        val restored = QuestionVersionRules.restore(snapshot, persisted)
+        assertEquals(question.prompt, restored.question.prompt)
+        assertEquals(listOf("cloze-collection"), newIds)
+    }
+
     @Test
     fun deletingQuestionCascadesDependentContentAndReviewRows() = runBlocking {
         val dao = openDatabase().dao()

@@ -85,6 +85,43 @@ class QuestionInterchangeTest {
         assertEquals(1, validMcq.rows.size)
     }
 
+    @Test fun clozeCsvRoundTripsWithTheDeletionTextAsTheCanonicalAnswer() {
+        val source = QuestionEntity(
+            id = "cloze-csv-1",
+            prompt = "The {{c1::mitochondrion}} makes {{c2::ATP}}.",
+            answer = "old answer",
+            type = "Cloze"
+        )
+        val csv = QuestionInterchange.exportCsv(listOf(source))
+        val preview = QuestionInterchange.previewCsv(csv, emptyList())
+        assertEquals(1, preview.rows.size)
+        assertEquals("mitochondrion; ATP", preview.rows.single().answer)
+        assertEquals(source.prompt, preview.rows.single().prompt)
+    }
+
+    @Test fun clozeCsvImportValidatesMarkupAndDerivesAnswerFromPrompt() {
+        val valid = QuestionInterchange.previewCsv(
+            "type,prompt,answer\nCloze,The {{c1::mitochondrion}} makes {{c2::ATP}},incorrect spreadsheet answer",
+            emptyList()
+        )
+        assertEquals(1, valid.rows.size)
+        assertEquals("mitochondrion; ATP", valid.rows.single().answer)
+
+        val blankBack = QuestionInterchange.previewCsv(
+            "type,prompt,answer\nCloze,The {{c1::nucleus}} stores DNA,",
+            emptyList()
+        )
+        assertEquals(1, blankBack.rows.size)
+        assertEquals("nucleus", blankBack.rows.single().answer)
+
+        val malformed = QuestionInterchange.previewCsv(
+            "type,prompt,answer\nCloze,No deletion here,answer",
+            emptyList()
+        )
+        assertTrue(malformed.rows.isEmpty())
+        assertTrue(malformed.issues.single().message.contains("Cloze rows need"))
+    }
+
     @Test fun rejectsQuoteInsideUnquotedField() {
         assertThrows(IllegalArgumentException::class.java) {
             QuestionInterchange.importCsv("front,back\nQuestion with \"quote,Answer")

@@ -82,7 +82,7 @@ object QuestionInterchange {
                 val position = names.firstNotNullOfOrNull { name -> header.indexOf(name).takeIf { hasHeader && it >= 0 } } ?: fallback
                 return cells.getOrNull(position).orEmpty()
             }
-            val row = if (anki) {
+            val parsedRow = if (anki) {
                 val frontIndex = if (hasHeader) header.indexOf("front").takeIf { it >= 0 } ?: 0 else 0
                 val backIndex = if (hasHeader) header.indexOf("back").takeIf { it >= 0 } ?: 1 else 1
                 val tagsIndex = if (hasHeader) header.indexOf("tags").takeIf { it >= 0 } ?: 2 else 2
@@ -93,8 +93,9 @@ object QuestionInterchange {
             } else {
                 val prompt = field("prompt", "front", "question", fallback = 0).trim()
                 val answer = field("answer", "back", fallback = 1).trim()
-                if (prompt.isBlank() || answer.isBlank()) null else Row(
-                    id = field("id", "guid").trim(), type = field("type", "questiontype").ifBlank { "Flashcard" },
+                val type = field("type", "questiontype").ifBlank { "Flashcard" }.trim()
+                if (prompt.isBlank() || (answer.isBlank() && type != "Cloze")) null else Row(
+                    id = field("id", "guid").trim(), type = type,
                     prompt = prompt, answer = answer, explanation = field("explanation", "notes"),
                     options = field("options", "choices"), subject = field("subject"), chapter = field("chapter"),
                     topic = field("topic"), tags = field("tags", "tag"),
@@ -103,10 +104,19 @@ object QuestionInterchange {
                     sourceTitle = field("sourcetitle", "source", "book"), sourceDetail = field("sourcedetail", "page", "reference")
                 )
             }
-            if (row == null) {
+            if (parsedRow == null) {
                 issues += ImportIssue(rowNumber, "Missing required prompt/front or answer/back")
                 return@forEachIndexed
             }
+            val row = if (parsedRow.type == "Cloze") {
+                val clozeAnswers = ClozeRules.answers(parsedRow.prompt)
+                if (clozeAnswers.isEmpty()) {
+                    issues += ImportIssue(rowNumber, "Cloze rows need at least one valid {{c1::hidden text}} deletion")
+                    return@forEachIndexed
+                }
+                // The deletion text is the source of truth, matching the Question Editor save path.
+                parsedRow.copy(answer = clozeAnswers.joinToString("; "))
+            } else parsedRow
             if (row.prompt.length > 100_000 || row.answer.length > 100_000 || row.explanation.length > 100_000 || row.options.length > 100_000) {
                 issues += ImportIssue(rowNumber, "Prompt, answer, explanation or options exceed the 100,000 character limit")
                 return@forEachIndexed

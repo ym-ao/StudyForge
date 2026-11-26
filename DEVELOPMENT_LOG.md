@@ -598,3 +598,15 @@ Targeted Kotlin smoke checks passed across multipart grading, CSV/MCQ preview, q
 - Source-level CI wiring includes lint, unit tests, and API 35 Room instrumentation. The latest user-reported workflow failure was emulator boot timeout before `connectedDebugAndroidTest`; the workflow now enables KVM and allows 900 seconds. This change still requires a fresh GitHub Actions run.
 - Remaining acceptance gates: successful GitHub Actions lint/build/JUnit/emulator run; actual Android JSON export/import round-trip; populated historical Room migration runtime coverage; signed APK certificate continuity using the existing external key; and physical-device update/offline/backup acceptance. Continue auditing approved V1/V2 requirements (advanced editor/accessibility, broader smart collections/bulk workflows, deeper analytics/time-spent reliability, and audit attribution). Do not start V3.
 - No production source, app version/versionCode, Room/backup schema, signing material, or original blueprint was changed in this audit. No APK was built or released. The original `StudyForge_Plan.txt` remains unchanged.
+
+
+## 2026-11-26 — V3 pagination scope and Cloze crash report
+
+- Added formal V3 Room Paging 3/database pagination scope to `ROADMAP.md`, including paged Library queries, DB-backed search/filter/sort, incremental Study loading, lazy math rendering, large-library performance tests, and data/FSRS preservation.
+- Logged a critical V2 device report: Study crashes after reaching an imported Cloze card; Study now crashes on every entry; assigning a Cloze question to a collection also crashes. Source inspection does not establish root cause. Existing Cloze tests are limited to pure masking/extraction.
+- Next: obtain Logcat stack trace, isolate minimal Cloze record, and test import → Study reveal → collection membership/version snapshot on device. No code fix is claimed.
+- Original `StudyForge_Plan.txt`, app version, Room schema, backup schema and signing configuration are unchanged.
+
+## 2026-11-26 — Cloze remove-and-replace audit
+
+Replaced the minimal regex-based Cloze helper with a bounded scanner that parses indexed deletions and optional hints, supports whole-note and per-index masking, and leaves malformed notation unchanged. Unified Cloze answer normalization between CSV import and the question editor, added import validation, masked the editor preview, and cached Cloze rendering data in Study. Hardened collection save paths by filtering stale collection IDs and surfacing persistence failures rather than allowing unhandled coroutine exceptions to close the app. Added unit and Room runtime regression coverage. See `CLOZE_REIMPLEMENTATION_AUDIT.md` for before/after comparison and verification limitations. Standalone Kotlin Cloze and CSV harnesses passed (7 + 4 checks); Android Gradle/Room tests and physical-device verification remain pending.

@@ -380,6 +380,8 @@ fun StudyScreen(
         val options = remember(q.id, q.optionsJson) {
             runCatching { JSONArray(q.optionsJson).let { array -> (0 until array.length()).map { array.optString(it) } } }.getOrDefault(emptyList())
         }
+        val clozeAnswers = remember(q.id, q.prompt) { ClozeRules.answers(q.prompt) }
+        val maskedClozePrompt = remember(q.id, q.prompt) { ClozeRules.mask(q.prompt) }
         Text("Card $progressPosition of $progressTotal", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         LinearProgressIndicator(
             progress = progressPosition.toFloat() / progressTotal.toFloat(),
@@ -391,7 +393,7 @@ fun StudyScreen(
                     Text(q.type.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
                 }
-                RichContentText(if (q.type == "Cloze" && !revealed) ClozeRules.mask(q.prompt) else q.prompt, style = MaterialTheme.typography.titleLarge)
+                RichContentText(if (q.type == "Cloze" && !revealed) maskedClozePrompt else q.prompt, style = MaterialTheme.typography.titleLarge)
                 contentBlocksByQuestion[q.id].orEmpty().sortedBy { it.position }.forEach { block ->
                     when (block.kind.uppercase()) {
                         "LATEX" -> if (block.text.isNotBlank()) LatexFormulaView(block.text)
@@ -479,7 +481,8 @@ fun StudyScreen(
                     else {
                         HorizontalDivider()
                         Text("Answer", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        RichContentText(q.answer, style = MaterialTheme.typography.titleMedium)
+                        val revealedAnswer = if (q.type == "Cloze") clozeAnswers.joinToString("; ").ifBlank { q.answer } else q.answer
+                        RichContentText(revealedAnswer, style = MaterialTheme.typography.titleMedium)
                         if (mode == "Step-by-step" && stepByStepStage < 2) {
                             Button(onClick = { stepByStepStage = 2 }, modifier = Modifier.fillMaxWidth()) { Text("Next: reveal explanation") }
                         }
