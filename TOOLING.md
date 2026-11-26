@@ -76,6 +76,10 @@ Distinguish static source checks, host SQLite checks, Kotlin-only harnesses, And
 
 Do not call StudyForge V3.0 accepted or release-ready while any required gate in `V3_FINAL_ACCEPTANCE_RUNBOOK.md` remains unverified or explicitly deferred by the user.
 
+## Official Android command-line tools package checked for this handoff
+
+On 2026-11-26, the Android Developers download page listed the Linux command-line-tools archive `commandlinetools-linux-15859902_latest.zip` (181.8 MB), SHA-256 `4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583`, at `https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip`. Recheck the official page before future installations because Google updates this package. The URL and checksum are documented for reproducibility; the archive was **not downloaded or verified locally** in the current restricted environment.
+
 ## Reproducible bootstrap script
 
 For a network-enabled Debian/Ubuntu Linux runner with package-install permissions:

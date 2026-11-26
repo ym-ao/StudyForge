@@ -1,3 +1,23 @@
+# Build status addendum — CI Kotlin compile-error correction (2026-11-26)
+
+- User-provided GitHub Actions compiler output identified two source errors: a duplicate `@Composable` annotation on `SelectionFormattingField` in `StudyForgeApp.kt`, and `LibraryViewModel.repository` being referenced by member functions without being declared as a property.
+- Corrected the duplicate annotation by retaining one `@Composable`. Changed the constructor parameter to `private val repository: QuestionRepository`, preserving the existing factory injection and allowing `countMatches` / `countTagUsage` to access the repository property.
+- These changes address the two reported Kotlin compiler diagnostics. They have **not** yet been verified by Gradle compilation, Android lint, JUnit, Room instrumentation, or GitHub Actions in this environment (no Gradle/Android SDK and network download access is blocked). The next CI run is the required confirmation; any additional diagnostics must be handled from its output.
+- No FSRS, app identity, version, Room/backup schema, migration, signing, or original `StudyForge_Plan.txt` changes were made.
+
+---
+
+# Build status addendum — V3.0 Batch 9 environment and acceptance preparation (2026-11-26)
+
+- Source: supplied `StudyForge-V3.0-Batch-9-Environment-Prepared.zip`, extracted without changing production source. Environment inspection was performed before installation attempts. Container: Linux x86_64, 5.8 GiB RAM, approximately 30 GiB free disk. Java/Javac 21.0.12 are present; JDK 17, Gradle 8.13, Gradle Wrapper, Android SDK, SDK Platform 36, Build Tools 36.0.0, ADB and Android Emulator are absent. No SDK environment variables are set. No Gradle wrapper JAR or other cached Gradle distribution was found.
+- Attempted the repository bootstrap with `bash scripts/bootstrap_android_tools.sh`. The script reached `apt-get update` while trying to provision JDK 17, but Debian repository DNS resolution was unavailable; the attempt was stopped after 30 seconds. Direct HTTPS checks to `services.gradle.org` and `dl.google.com` also failed with `curl: (6) Could not resolve host`. Therefore Gradle, JDK 17 and Android SDK packages could not be installed, and wrapper generation / Android build could not proceed.
+- Emulator feasibility check: `/dev/kvm` is absent and no `vmx`/`svm` CPU virtualization flag is exposed. Do not attempt to install or start an emulator in this environment.
+- Ran every Python verifier listed in the current `.github/workflows/android-apk.yml` migration/backup regression step: **31 scripts passed, 0 failed**. This includes all migration verifiers 7→8 through 15→16, backup/schema/media/snapshot checks, V2 source integrity, V3 Paging and Batch 2–8 readiness, and V3 final acceptance. `verify_v3_final_acceptance.py` reports **11/11** static checks passed.
+- Ran `python3 tools/benchmark_v3_scalability.py`: synthetic host SQLite checks passed at 10,000 and 50,000 questions. All functional/index-plan checks passed. Library, simple Due and collection first-page plans use the intended indexes; recent reviews still report a temporary B-tree for the final ORDER BY term. Median timings are host SQLite only (10k→50k): Library 0.043→0.042 ms; Due snapshot 0.129→0.147 ms; collection page 0.048→0.051 ms; recent reviews 0.019→0.062 ms; active-card content 0.005→0.006 ms. These are not Android/Room/device measurements.
+- Android lint, Kotlin/Compose/KSP compilation, Gradle JUnit, Room instrumentation, populated Android Room migration, Android JSON backup/restore, GitHub Actions execution, APK build/signing, and physical-device profiling/acceptance remain **not run**. The working directory has no `.git` metadata and no GitHub connector is available in this execution environment, so no push or workflow dispatch was performed.
+- `StudyForge_Plan.txt` SHA-256: `8d5bebe805901cae7d243c41595458ccbe2a288d7ec49b01129f5443e4981abc`; it was not modified. App identity remains 2.1.24/code 28; Room 16; JSON backup 15; FSRS and signing configuration unchanged. No APK/release produced.
+- Bootstrap script executable permission was corrected so the documented `./scripts/bootstrap_android_tools.sh` invocation is usable in the prepared source package.
+
 # Build status addendum — V3.0 Batch 7 (2026-11-26)
 
 - Removed root-level full-table rich-content and multipart-part observers. Study hydrates rich blocks for the active question only; Exam hydrates multipart parts for the bounded active queue only, waits before enabling Start Exam, and shows a load error. Added Room runtime test source for the bounded DAO paths.

@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.asStateFlow
 
 /** Owns filter state and cancels obsolete database paging streams on criteria changes. */
-class LibraryViewModel(repository: QuestionRepository) : ViewModel() {
+class LibraryViewModel(private val repository: QuestionRepository) : ViewModel() {
     private val _criteria = MutableStateFlow(LibraryFilterCriteria())
     val criteria: StateFlow<LibraryFilterCriteria> = _criteria.asStateFlow()
 

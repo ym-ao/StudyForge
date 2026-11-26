@@ -656,7 +656,6 @@ private fun ActionCard(title: String, description: String, icon: androidx.compos
 }
 
 @Composable
-@Composable
 private fun SelectionFormattingField(
     value: String,
     onValueChange: (String) -> Unit,

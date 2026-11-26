@@ -1,3 +1,29 @@
+# CURRENT HANDOFF — 2026-11-26 (CI Kotlin compile-error correction)
+
+The user supplied the latest GitHub Actions compiler output. Two concrete Kotlin errors were confirmed in the Batch 9 source and fixed:
+
+1. `StudyForgeApp.kt` had two consecutive `@Composable` annotations on `SelectionFormattingField`; one was removed.
+2. `LibraryViewModel(repository: QuestionRepository)` used `repository` from member functions without storing it as a property; constructor is now `LibraryViewModel(private val repository: QuestionRepository)`. Existing factory injection is unchanged.
+
+These are source-level fixes matching the exact reported diagnostics. **Do not claim the Android build now passes:** Gradle compilation, lint, JUnit, Room instrumentation and CI have not been rerun in this environment. The immediate next action is to push this corrected source and rerun **Build StudyForge APK**; inspect the next CI result for any remaining errors.
+
+No FSRS, app identity/version, Room schema 16, backup schema 15, migration, signing configuration, or original `StudyForge_Plan.txt` changes. Continue V3.0 acceptance; do not start V3.1 until acceptance gates are satisfied or explicitly deferred.
+
+---
+
+# CURRENT HANDOFF — 2026-11-26 (Batch 9 environment inspection and host acceptance checks)
+
+The Batch 9 ZIP was opened and the required `TOOLING.md`, `TESTING_STRATEGY.md` and `V3_FINAL_ACCEPTANCE_RUNBOOK.md` were read. The environment was inspected before attempting installation. See the latest top entry in `BUILD_STATUS.md` for exact evidence.
+
+- All 31 Python verifiers listed in the current GitHub Actions migration/backup step passed locally, including `verify_v3_final_acceptance.py` (11/11). The synthetic host SQLite benchmark passed at 10k and 50k. The benchmark is host-only; it does not establish Android Room or physical-device performance.
+- Android toolchain installation was attempted through `scripts/bootstrap_android_tools.sh`. It reached `apt-get update` for JDK 17 but repository DNS was unavailable; direct Gradle and Google SDK download DNS also failed. This environment has Java 21 but no JDK 17, Gradle, wrapper, Android SDK or ADB. `/dev/kvm` and exposed CPU virtualization flags are absent, so emulator installation is not practical here. The bootstrap script now has its executable bit set.
+- Android lint/compile/JUnit, Room instrumentation, populated Android migration, real Android backup/restore, GitHub Actions, APK/signing and physical-device acceptance remain unverified. The extracted source has no Git metadata and no GitHub connector is available here, so this session did not push or dispatch a workflow.
+- `StudyForge_Plan.txt` remains unchanged (SHA-256 `8d5bebe805901cae7d243c41595458ccbe2a288d7ec49b01129f5443e4981abc`). App 2.1.24/code 28, Room 16, backup 15, FSRS and signing contract remain unchanged. No APK/release was produced.
+
+**Next action:** import/push this exact updated source to the intended GitHub repository and run **Build StudyForge APK** (`workflow_dispatch` or push to `main`). Inspect lint, JUnit, API 35 Room instrumentation and APK artifact results. If CI passes, download/install the exact debug APK and execute the populated schema-15→16 migration, JSON export/import, and physical-device acceptance steps in `V3_FINAL_ACCEPTANCE_RUNBOOK.md`. Do not begin V3.1 numerical templates or declare V3.0 accepted until the runbook gates have evidence or are explicitly deferred by the user.
+
+---
+
 # CURRENT HANDOFF — 2026-11-26 (V3.0 Batch 9 final acceptance preparation)
 
 ## Mandatory tooling and resource-use policy
