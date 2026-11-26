@@ -1,3 +1,12 @@
+## Latest V3.0 status — Batch 9 CI reported successful; device acceptance pending (2026-11-26)
+
+- User reports the latest GitHub Actions build succeeded after fixing two Kotlin compilation errors and the Room PagingSource invalidation instrumentation-test race. The exact run URL/commit/artifact was not supplied for independent inspection.
+- No new V3 feature implementation was added in this continuation. Added a detailed physical-device acceptance checklist and updated the handoff/build evidence.
+- V3.0 remains in final acceptance: phone install and workflows, provenance-confirmed populated Room 15→16 migration, backup/restore, and device performance/UI checks remain open.
+- App identity 2.1.24/code 28; Room 16; JSON backup 15; FSRS and signing identity unchanged. Original plan retained. Do not begin V3.1 until acceptance is evidenced or explicitly deferred.
+
+---
+
 ## Latest V3.0 implementation — Batch 7 (2026-11-26)
 
 - Source-implemented: per-active-question rich block hydration; per-active-exam-snapshot multipart part hydration; bounded Room query and Room instrumentation test source; synthetic 10k/50k SQLite benchmark; EXPLAIN plan reporting; CI/static gate 9/9.
@@ -707,3 +716,17 @@ The source now includes Android instrumentation coverage for current Room schema
 - Scope is intentionally partial: detailed Progress groupings (topic/type/subject/chapter/mistake categories), recent review prompt hydration, and exam analytics/history still consume full lists. Root question observation remains for editor, tag discovery, backup/export, and legacy consumers. These are explicit follow-on items, not claimed complete.
 - Room schema 15, JSON backup schema 15, app 2.1.24/versionCode 28, FSRS, package/signing identity and original `StudyForge_Plan.txt` remain unchanged. No APK produced.
 - Android Gradle/KSP compilation, JUnit, Room instrumentation, CI emulator, process/device behavior and 10k/50k performance remain unverified.
+
+## Latest V3.1 implementation — Batch 2 template persistence (2026-11-27)
+
+- Added a bounded/versioned JSON codec for numerical templates, with strict engine validation during encode and decode. Payload ceiling is 64 KiB; field/count bounds are enforced before persistence.
+- Added dedicated `numerical_template` content-block storage and `QuestionRepository.saveNumericalTemplate` / `loadNumericalTemplate`. Existing question fields are not overloaded. Existing content-block export/import and question-version snapshots carry this metadata; backup import explicitly permits the kind and applies the stricter payload bound.
+- No Room schema or JSON backup schema change: Room remains 16 and backup remains 15. Legacy Numerical exact-text grading and CSV/Anki interchange remain unchanged. FSRS untouched.
+- Added codec regression test sources and `verify_v31_template_persistence.py` (9/9). The Batch 1 numerical engine verifier remains 11/11. Android Gradle/JUnit/Room runtime execution remains pending.
+- Next: editor authoring, preview, validation diagnostics and draft/verified status; then Study/Exam deterministic variant presentation and grading integration with compatibility tests.
+
+## V3.1 Batch 3 — Numerical template authoring (2026-11-27)
+- Implemented authoring UI in the Numerical question editor, including variables, constraints, formula, units, tolerance, deterministic preview and Draft/Verified state.
+- Template payload remains in the dedicated structured content block; legacy Numerical questions remain compatible.
+- Source verification: 35/35 workflow Python checks passed; standalone numerical engine Kotlin compile passed. Android Gradle/Compose/JUnit and device verification remain pending.
+- Dynamic Study/Exam grading integration is not yet implemented.

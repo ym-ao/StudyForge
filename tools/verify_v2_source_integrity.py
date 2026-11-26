@@ -164,8 +164,8 @@ for case in ("returnsGapFilledFourteenDayTimelineAndScoredAccuracy", "currentStr
     assert case in review_trend_tests, f"Missing review trend regression case: {case}"
 for case in ("validImagePayloadIsPreservedInCanonicalBase64", "malformedBase64IsRejected", "payloadOverDecodedByteLimitIsRejected"):
     assert case in media_tests, f"Missing media import regression case: {case}"
-assert "StudyForge-V3.0-dev-debug-apk" in workflow
-assert "StudyForge-V3.0-dev-signed-apk" in workflow
+assert "StudyForge-V3.1-dev-debug-apk" in workflow
+assert "StudyForge-V3.1-dev-signed-apk" in workflow
 assert "tools/verify_v3_paging_foundation.py" in workflow
 assert "KEY_ALIAS: studyforge-release" in workflow
 for secret in ("SIGNING_KEYSTORE_BASE64", "SIGNING_STORE_PASSWORD", "SIGNING_KEY_PASSWORD"):

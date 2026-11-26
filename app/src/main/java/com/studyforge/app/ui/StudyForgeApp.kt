@@ -98,6 +98,7 @@ import com.studyforge.app.data.SavedFilterPresetEntity
 import com.studyforge.app.data.TagEntity
 import com.studyforge.app.data.QuestionContentBlockEntity
 import com.studyforge.app.data.QuestionPartEntity
+import com.studyforge.app.data.NumericalTemplateCodec
 import com.studyforge.app.data.QuestionAuthoringRules
 import com.studyforge.app.data.MediaImportRules
 import com.studyforge.app.data.StudySessionPresetEntity
@@ -310,15 +311,19 @@ fun StudyForgeApp(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
+        // Study is a focused, vertically constrained workflow. The selected bottom-nav
+        // destination already identifies it, so omit the global brand bar only here.
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("StudyForge", fontWeight = FontWeight.Bold)
-                        Text("Build your own learning system", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (selectedTab != 3) {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text("StudyForge", fontWeight = FontWeight.Bold)
+                            Text("Build your own learning system", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
-                }
-            )
+                )
+            }
         },
         bottomBar = {
             NavigationBar {
@@ -767,6 +772,7 @@ private fun QuestionEditor(
     val contentBlocks = remember(initial?.id) { mutableStateListOf<QuestionContentBlockEntity>().apply { addAll(initialContentBlocks) } }
     val context = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
+    var numericalTemplateError by remember(initial?.id) { mutableStateOf<String?>(null) }
     var showVersionHistory by remember { mutableStateOf(false) }
     var imageTargetIndex by remember { mutableIntStateOf(-1) }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -801,6 +807,7 @@ private fun QuestionEditor(
                     if (initial != null) TextButton(onClick = { showVersionHistory = true }) { Text("History (${versions.size})") }
                     TextButton(onClick = {
                     if (prompt.isBlank() || (answer.isBlank() && type != "Cloze")) error = "Add both a question and an answer before saving."
+                    else if (type == "Numerical" && numericalTemplateError != null) error = numericalTemplateError
                     else if (type == "Cloze" && !ClozeRules.hasCloze(prompt)) error = "Add at least one cloze deletion using {{c1::hidden text}}."
                     else if ((type == "MCQ" || type == "True/False") && options.lines().map { it.trim() }.filter { it.isNotBlank() }.size < 2) error = "An MCQ needs at least two options."
                     else if ((type == "MCQ" || type == "True/False") && options.lines().map { it.trim() }.filter { it.isNotBlank() }.none { it == answer.trim() }) error = "The correct answer must exactly match one of the options."
@@ -852,6 +859,24 @@ private fun QuestionEditor(
             if (type == "Cloze") Text("Use {{c1::hidden text}} in the question. Each cloze is hidden during study and shown when you reveal the answer.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (type != "Cloze") SelectionFormattingField(answer, { answer = it; error = null }, if (type == "MCQ" || type == "True/False") "Correct option (exact text)" else if (type == "Numerical") "Expected numerical answer" else "Answer / Back", minLines = 2)
             if (answer.isNotBlank() && type != "MCQ" && type != "True/False" && type != "Cloze") Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(10.dp)) { Text("Answer preview", style = MaterialTheme.typography.labelSmall); RichContentText(answer) } }
+            if (type == "Numerical") {
+                val existingTemplatePayload = contentBlocks.firstOrNull { it.kind == NumericalTemplateCodec.CONTENT_BLOCK_KIND }?.text.orEmpty()
+                NumericalTemplateEditor(existingTemplatePayload) { payload, validationError ->
+                    numericalTemplateError = validationError
+                    if (payload != null) {
+                        val old = contentBlocks.indexOfFirst { it.kind == NumericalTemplateCodec.CONTENT_BLOCK_KIND }
+                        val block = QuestionContentBlockEntity(
+                            id = if (old >= 0) contentBlocks[old].id else UUID.randomUUID().toString(),
+                            questionId = initial?.id ?: "pending",
+                            position = if (old >= 0) contentBlocks[old].position else contentBlocks.size,
+                            kind = NumericalTemplateCodec.CONTENT_BLOCK_KIND,
+                            text = payload
+                        )
+                        if (old >= 0) contentBlocks[old] = block else contentBlocks.add(block)
+                    }
+                }
+                if (numericalTemplateError != null) Text(numericalTemplateError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
             SelectionFormattingField(explanation, { explanation = it }, "Explanation (optional)", minLines = 3)
             HorizontalDivider()
             Text("Source / provenance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -1470,14 +1495,14 @@ private suspend fun importBackup(context: Context, database: StudyDatabase, uri:
     val contentArray = root.optJSONArray("contentBlocks") ?: JSONArray()
     for (i in 0 until contentArray.length()) {
         val o = contentArray.getJSONObject(i)
-        val allowedKinds = setOf("text", "heading", "latex", "image", "table", "graph", "list", "divider", "derivation")
+        val allowedKinds = setOf("text", "heading", "latex", "image", "table", "graph", "list", "divider", "derivation", "numerical_template")
         val kind = o.optString("kind", "text").take(30).lowercase().let { if (it in allowedKinds) it else "text" }
         // Match the editor's 1.5 MB image limit and reject malformed Base64 before Room writes it.
         val encoded = MediaImportRules.sanitizeBase64Image(o.optString("mediaBase64")).orEmpty()
         importedContentBlocks += QuestionContentBlockEntity(
             id = o.optString("id").ifBlank { UUID.randomUUID().toString() },
             questionId = o.getString("questionId"), position = o.optInt("position", i).coerceAtLeast(0),
-            kind = kind, text = o.optString("text").take(100_000), mediaBase64 = encoded,
+            kind = kind, text = o.optString("text").take(if (kind == "numerical_template") NumericalTemplateCodec.MAX_PAYLOAD_CHARS else 100_000), mediaBase64 = encoded,
             mediaMimeType = o.optString("mediaMimeType").take(100).takeIf { it.startsWith("image/") }.orEmpty(), altText = o.optString("altText").take(500)
         )
     }

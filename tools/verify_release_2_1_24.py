@@ -7,8 +7,8 @@ scheduler = (root / "app/src/main/java/com/studyforge/app/data/ReviewScheduler.k
 tests = (root / "app/src/test/java/com/studyforge/app/data/Fsrs6ReferenceInvariantTest.kt").read_text()
 backup = (root / "app/src/main/java/com/studyforge/app/data/BackupManager.kt")
 assert 'versionName = "2.1.24"' in gradle and "versionCode = 28" in gradle
-assert "StudyForge-V3.0-dev-debug-apk" in workflow
-assert "StudyForge-V3.0-dev-signed-apk" in workflow
+assert "StudyForge-V3.1-dev-debug-apk" in workflow
+assert "StudyForge-V3.1-dev-signed-apk" in workflow
 assert "nextForgetStability(currentD" in scheduler and "nextRecallStability(currentD" in scheduler
 assert "coerceAtLeast(0.001)" in scheduler
 assert "longTermReviewTransitionsMatchFsrs6ReferenceVectors" in tests

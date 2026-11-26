@@ -93,6 +93,24 @@ class QuestionRepository(private val dao: StudyDao) {
 
     suspend fun countTagUsage(tag: String): Int = dao.countQuestionsUsingTag(tag)
 
+    /** Saves template metadata in its own structured-content block; legacy question fields remain untouched. */
+    suspend fun saveNumericalTemplate(questionId: String, template: NumericalTemplateEngine.Template) {
+        require(questionId.isNotBlank())
+        val blocks = dao.getContentBlocks(questionId)
+        val existing = blocks.singleOrNull { it.kind == NumericalTemplateCodec.CONTENT_BLOCK_KIND }
+        require(blocks.count { it.kind == NumericalTemplateCodec.CONTENT_BLOCK_KIND } <= 1) {
+            "This question contains duplicate numerical template blocks."
+        }
+        val position = existing?.position ?: ((blocks.maxOfOrNull { it.position } ?: -1) + 1)
+        dao.upsertContentBlocks(listOf(NumericalTemplateCodec.toContentBlock(
+            questionId = questionId, template = template, position = position,
+            blockId = existing?.id ?: "numerical-template:$questionId"
+        )))
+    }
+
+    suspend fun loadNumericalTemplate(questionId: String): Result<NumericalTemplateEngine.Template> =
+        NumericalTemplateCodec.fromContentBlocks(questionId, dao.getContentBlocks(questionId))
+
     /** Captures a bounded, stable order of IDs; ratings cannot shift offsets mid-session. */
     suspend fun createStudyQueueSnapshot(mode: String, now: Long, limit: Int): List<String> {
         require(limit in 1..MAX_STUDY_SESSION_SIZE) { "Study session size must be between 1 and $MAX_STUDY_SESSION_SIZE" }

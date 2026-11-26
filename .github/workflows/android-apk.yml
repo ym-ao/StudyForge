@@ -64,6 +64,13 @@ jobs:
           python3 tools/verify_v3_batch8_readiness.py
           python3 tools/benchmark_v3_scalability.py
           python3 tools/verify_v3_final_acceptance.py
+          python3 tools/verify_v31_numerical_engine.py
+          python3 tools/verify_v31_template_persistence.py
+          python3 tools/verify_v31_template_editor.py
+          python3 tools/verify_v31_numerical_integration.py
+          python3 tools/verify_v31_numerical_mcq.py
+          python3 tools/verify_v31_exam_history_review.py
+          python3 tools/verify_v31_study_mcq_flow.py
 
       - name: Run Android lint
         run: gradle --no-daemon :app:lintDebug
@@ -96,7 +103,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
         with:
-          name: StudyForge-V3.0-dev-debug-apk
+          name: StudyForge-V3.1-dev-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
@@ -147,7 +154,7 @@ jobs:
         if: steps.signing.outputs.configured == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: StudyForge-V3.0-dev-signed-apk
+          name: StudyForge-V3.1-dev-signed-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30

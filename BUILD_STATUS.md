@@ -1,3 +1,32 @@
+# Build status addendum — V3.1 Batch 1 numerical engine foundation (2026-11-27)
+
+- Began V3.1 after the user explicitly confirmed V3.0 verification and requested the next update. This batch adds a pure Kotlin, versioned numerical-template model and deterministic engine in `NumericalTemplateEngine.kt`.
+- Implemented bounded typed variables, prompt/explanation placeholder substitution, seeded variant generation, cross-variable comparison constraints, finite-result/overflow checks, and a recursive-descent arithmetic parser. The parser whitelists arithmetic/comparison syntax and does not execute user text as code.
+- Added a small explicit unit registry (length, time, mass, volume, temperature, pressure, energy and speed), compatible-dimension conversion, absolute/relative tolerance grading, decimal/significant-figure formatting, accepted equivalent expressions, and seeded distinct MCQ distractors.
+- Added seven focused JUnit test cases and `tools/verify_v31_numerical_engine.py` (11/11 source-contract checks). The new verifier is wired into GitHub Actions. Compiled the engine with local `kotlinc` 1.9.0 and ran a standalone smoke test: PASS. All 33 Python scripts invoked by the current workflow passed locally, including the new V3.1 verifier.
+- Existing legacy Numerical study grading and backup/import formats are unchanged. No Room entity/schema migration or backup schema change in this foundational batch. Template persistence in question records, editor authoring/preview UI, template draft/verified workflow, and end-to-end study/exam integration are deliberately still pending; do not call V3.1 complete.
+- No Android Gradle build, Android lint, Gradle JUnit task, Room instrumentation or phone verification was possible in this environment (JDK 17/Gradle/Android SDK/ADB unavailable and downloads blocked by DNS). Local Kotlin smoke compilation is not an Android build.
+- `StudyForge_Plan.txt` remains unchanged (SHA-256 `8d5bebe805901cae7d243c41595458ccbe2a288d7ec49b01129f5443e4981abc`). FSRS, app identity/version, signing contract, Room schema 16 and JSON backup schema 15 remain unchanged.
+
+# Build status addendum — compact Study screen layout (2026-11-26)
+
+- Removed the global `StudyForge / Build your own learning system` app bar while the Study destination is selected; the app bar remains on all other tabs.
+- Removed the duplicate `Study` heading inside the Study page. The bottom navigation continues to identify the selected destination.
+- Reduced Study page outer padding/vertical gaps and made the question card more compact after reveal/check (smaller card padding/gaps and prompt typography) to expose more of the answer, explanation and rating controls without changing their behavior.
+- Targeted static checks passed: `python3 tools/verify_navigation_layout.py` and `python3 tools/verify_study_ui_performance.py`. These validate source contracts only; Android Compose compilation and physical-phone visual confirmation have not yet been run for this edit.
+- No FSRS, question data, Room/backup schema, migration, app version, signing, or original `StudyForge_Plan.txt` changes.
+- Local environment recheck: Java 21; no Gradle executable, Gradle wrapper, or ADB. A Gradle build/APK cannot be produced in this environment. Push this source and run the GitHub Actions workflow, then install its exact debug APK for visual confirmation.
+
+# Build status addendum — CI success reported; physical-device acceptance pending (2026-11-26)
+
+- User reported that the latest GitHub Actions workflow completed successfully after the duplicate `@Composable` and `LibraryViewModel.repository` compile fixes, and after the Room PagingSource invalidation test was changed to wait for Room's asynchronous invalidation notification.
+- This is recorded as **user-reported CI success**. The Actions URL, commit SHA, individual job summaries, artifact name and APK bytes were not provided in this session, so they have not been independently verified here.
+- Added `V3_FINAL_DEVICE_ACCEPTANCE_CHECKLIST.md` to capture the exact APK, commit, SHA-256, phone/Android version, data-safety preflight, Library/Study/Cloze checks, populated migration evidence, backup/restore, and performance/UI results.
+- No app runtime source, Gradle configuration, version metadata, Room schema, backup schema, FSRS behavior or signing configuration was changed. App remains `com.studyforge.app` 2.1.24/code 28; Room 16; JSON backup 15. `StudyForge_Plan.txt` remains unchanged.
+- Still open: physical-phone install/update and core workflow acceptance; provenance-confirmed populated Room 15→16 migration; schema-15 backup restore and current-schema backup round-trip; large-library device performance and UI profiling; final acceptance decision. A successful CI run alone does not close these gates.
+
+---
+
 # Build status addendum — CI Kotlin compile-error correction (2026-11-26)
 
 - User-provided GitHub Actions compiler output identified two source errors: a duplicate `@Composable` annotation on `SelectionFormattingField` in `StudyForgeApp.kt`, and `LibraryViewModel.repository` being referenced by member functions without being declared as a property.
@@ -511,3 +540,19 @@ Do not report the Android toolchain as installed or V3.0 as accepted. GitHub Act
 - Updated the instrumentation test to wait up to 5 seconds, polling every 10 ms for `source.invalid`, then assert the flag. A genuine missing invalidation now fails with a bounded timeout and remains diagnosable. Production DAO/query behavior and database schema are unchanged.
 - Re-ran all 31 Python checks explicitly listed in the current GitHub Actions workflow, including migration 7→16, backup checks, V2/V3 readiness and 10k/50k host SQLite benchmark: all 31 passed after this test-only change.
 - Android instrumentation has NOT yet been rerun after the fix. The updated test must be confirmed by the next GitHub Actions emulator run. Gradle/Android build cannot be executed in this container because the Android toolchain/Gradle wrapper is absent. Do not mark V3.0 accepted until the emulator suite and remaining CI stages pass.
+
+# Build status addendum — V3.1 Batch 2 template persistence (2026-11-27)
+
+- Added `NumericalTemplateCodec.kt`: deterministic versioned JSON envelope for the numerical-template model, strict format-version checks, engine validation on encode/decode, bounded payload/fields/arrays, and safe rejection of malformed/unsupported payloads.
+- Added dedicated structured content-block kind `numerical_template`; repository save/load methods preserve all unrelated question fields and existing content blocks. The block is included by the existing JSON backup snapshot and question-version snapshot mechanisms. Backup import now accepts the dedicated kind and enforces the 64 KiB payload ceiling.
+- No Room migration or backup schema bump was needed: existing `question_content_blocks` is version-independent structured storage and is already exported/imported in schema 15. Existing old backups without this block continue through the unchanged path. Legacy Numerical exact-text grading and CSV/Anki remain unchanged.
+- Added three JUnit codec test cases (JSON round-trip/attachment, unknown/oversized payload rejection, invalid formula/missing block). `verify_v31_template_persistence.py` passes 9/9; Batch 1 engine verifier passes 11/11.
+- The workflow debug and signed-development artifact labels are now V3.1. Updated the legacy static artifact-label assertions accordingly; app `versionName=2.1.24`, `versionCode=28`, Room schema 16, backup schema 15, FSRS and signing identity remain unchanged.
+- Full Python workflow suite result is recorded below after execution. Android Gradle compilation, Android JUnit, Room instrumentation, actual Android backup restore and phone verification remain unrun because JDK 17/Gradle/Android SDK/ADB are unavailable and download DNS is blocked.
+- `StudyForge_Plan.txt` remains byte-for-byte unchanged with SHA-256 `8d5bebe805901cae7d243c41595458ccbe2a288d7ec49b01129f5443e4981abc`.
+- Final local regression result for this batch: **34/34 Python workflow checks passed, 0 failed** (including both V3.1 verifiers and all inherited migration/backup/V2/V3 static gates). This does not represent Android Gradle/JUnit execution.
+
+## 2026-11-27 — V3.1 Batch 3 numerical template authoring
+- Added the Numerical question editor template panel, variable/constraint/formula/unit/tolerance editing, seeded preview, and Draft/Verified status persistence.
+- 35/35 workflow Python checks pass locally; new editor verifier passes 9/9; numerical engine independently compiles with Kotlin 1.9.0.
+- Android Gradle/Compose build and JUnit remain pending; do not treat source checks as Android build verification.

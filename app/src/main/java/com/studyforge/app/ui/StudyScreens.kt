@@ -65,6 +65,9 @@ import com.studyforge.app.data.StudySettingsEntity
 import com.studyforge.app.data.ExamAttemptEntity
 import com.studyforge.app.data.ExamAttemptRules
 import com.studyforge.app.data.ClozeRules
+import com.studyforge.app.data.NumericalTemplateCodec
+import com.studyforge.app.data.NumericalTemplateEngine
+import com.studyforge.app.data.NumericalTemplateAttemptRules
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
@@ -315,13 +318,14 @@ fun StudyScreen(
                 OutlinedButton(onClick = { activeQueueFingerprint = ""; queueRefreshToken++ }) { Text("Retry") }
             }
         } else {
-            ExamModeScreen(questions = activeQuestions, loadQuestionParts = loadQuestionParts, settings = settings, onSaveExamAttempt = onSaveExamAttempt, onReview = onReview, onExit = { mode = "Due" })
+            ExamModeScreen(questions = activeQuestions, loadContentBlocks = loadContentBlocks, loadQuestionParts = loadQuestionParts, settings = settings, onSaveExamAttempt = onSaveExamAttempt, onReview = onReview, onExit = { mode = "Due" })
         }
         return
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-        Text("Study", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+    // Keep the study workspace compact: the bottom navigation already names this tab,
+    // and removing a duplicate page heading gives the question and revealed answer room.
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Saved sessions", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = {
@@ -426,6 +430,24 @@ fun StudyScreen(
             activeQuestionBlocks = runCatching { loadContentBlocks(q.id).sortedBy { it.position } }.getOrDefault(emptyList())
             contentBlocksLoaded = true
         }
+        val numericalTemplate = remember(activeQuestionBlocks, q.id) {
+            if (q.type == "Numerical") NumericalTemplateCodec.fromContentBlocks(q.id, activeQuestionBlocks).getOrNull()?.takeIf { it.authoringStatus == "VERIFIED" } else null
+        }
+        val studyAttemptKey = queueFingerprint
+        val numericalVariant = remember(numericalTemplate, studyAttemptKey, q.id) {
+            numericalTemplate?.let { NumericalTemplateAttemptRules.generate(it, studyAttemptKey, q.id).getOrNull() }
+        }
+        val numericalMcq = remember(numericalTemplate, studyAttemptKey, q.id) {
+            numericalTemplate?.let { NumericalTemplateEngine.generateMultipleChoice(it, NumericalTemplateAttemptRules.seedFor(studyAttemptKey, q.id)).getOrNull() }
+        }
+        val displayPrompt = numericalVariant?.prompt ?: q.prompt
+        val displayExplanation = numericalVariant?.explanation?.ifBlank { q.explanation } ?: q.explanation
+        val displayNumericalAnswer = numericalVariant?.let {
+            NumericalTemplateEngine.format(it.answer, numericalTemplate?.decimalPlaces ?: 2, numericalTemplate?.significantFigures ?: 0) + it.answerUnit.let { unit -> if (unit.isBlank()) "" else " $unit" }
+        } ?: q.answer
+        fun numericalCorrect(response: String): Boolean = if (numericalTemplate != null && numericalVariant != null) {
+            NumericalTemplateEngine.isCorrect(numericalTemplate, numericalVariant, response)
+        } else response.trim().replace(",", "") == q.answer.trim().replace(",", "")
         val progressTotal = (dueCompletedCount + activeQuestions.size).coerceAtLeast(1)
         val progressPosition = if (mode == "Due") dueCompletedCount + safeIndex + 1 else safeIndex + 1
         var revealedHintIds by remember(q.id) { mutableStateOf(emptySet<String>()) }
@@ -440,12 +462,15 @@ fun StudyScreen(
             modifier = Modifier.fillMaxWidth()
         )
         Card(shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.padding(if (revealed || checked) 14.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(if (revealed || checked) 9.dp else 11.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(q.type.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
                 }
-                RichContentText(if (q.type == "Cloze" && !revealed) maskedClozePrompt else q.prompt, style = MaterialTheme.typography.titleLarge)
+                RichContentText(
+                    if (q.type == "Cloze" && !revealed) maskedClozePrompt else displayPrompt,
+                    style = if (revealed || checked) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge
+                )
                 if (!contentBlocksLoaded) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 activeQuestionBlocks.forEach { block ->
                     when (block.kind.uppercase()) {
@@ -521,13 +546,25 @@ fun StudyScreen(
                         }
                     }
                 } else if (q.type == "Numerical") {
-                    if (!checked) {
-                        OutlinedTextField(value = selectedAnswer.orEmpty(), onValueChange = { selectedAnswer = it }, label = { Text("Your numerical answer") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    if (numericalTemplate != null && numericalVariant == null) {
+                        Text("This numerical template could not generate a valid question. Check its variables and constraints in the editor.", color = MaterialTheme.colorScheme.error)
+                    } else if (!checked) {
+                        if (numericalMcq != null) {
+                            numericalMcq.options.forEachIndexed { optionIndex, option ->
+                                Card(modifier = Modifier.fillMaxWidth().clickable { selectedAnswer = option.label }, colors = CardDefaults.cardColors(containerColor = if (selectedAnswer == option.label) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
+                                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text("${('A'.code + optionIndex).toChar()}.  ", fontWeight = FontWeight.Bold); Text(option.label)
+                                    }
+                                }
+                            }
+                        } else {
+                            OutlinedTextField(value = selectedAnswer.orEmpty(), onValueChange = { selectedAnswer = it }, label = { Text("Your numerical answer") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        }
                         Button(onClick = { checked = true }, enabled = !selectedAnswer.isNullOrBlank(), modifier = Modifier.fillMaxWidth()) { Text("Check answer") }
                     } else {
-                        val correct = selectedAnswer.orEmpty().trim().replace(",", "") == q.answer.trim().replace(",", "")
+                        val correct = numericalCorrect(selectedAnswer.orEmpty())
                         Text(if (correct) "Correct answer" else "Check the expected value below", fontWeight = FontWeight.Bold, color = if (correct) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error)
-                        RichContentText("Answer: ${q.answer}", style = MaterialTheme.typography.titleMedium)
+                        RichContentText("Answer: $displayNumericalAnswer", style = MaterialTheme.typography.titleMedium)
                     }
                 } else {
                     if (!revealed) Button(onClick = { revealed = true; stepByStepStage = 1 }, modifier = Modifier.fillMaxWidth()) { Text("Show answer") }
@@ -541,10 +578,10 @@ fun StudyScreen(
                         }
                     }
                 }
-                if ((revealed || checked) && q.explanation.isNotBlank() && (mode != "Step-by-step" || stepByStepStage >= 2 || q.type == "MCQ")) {
+                if ((revealed || checked) && displayExplanation.isNotBlank() && (mode != "Step-by-step" || stepByStepStage >= 2 || q.type == "MCQ")) {
                     HorizontalDivider()
                     Text("Explanation", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    RichContentText(q.explanation)
+                    RichContentText(displayExplanation)
                 }
             }
         }
@@ -559,7 +596,7 @@ fun StudyScreen(
                         OutlinedButton(onClick = {
                             val wasCorrect = when (q.type) {
                                 "MCQ", "True/False" -> selectedAnswer == q.answer
-                                "Numerical" -> selectedAnswer.orEmpty().trim().replace(",", "") == q.answer.trim().replace(",", "")
+                                "Numerical" -> numericalCorrect(selectedAnswer.orEmpty())
                                 else -> null
                             }
                             val reviewMode = when (q.learningState) {
@@ -596,6 +633,7 @@ fun StudyScreen(
 @Composable
 private fun ExamModeScreen(
     questions: List<QuestionEntity>,
+    loadContentBlocks: suspend (String) -> List<QuestionContentBlockEntity>,
     loadQuestionParts: suspend (List<String>) -> List<QuestionPartEntity>,
     settings: StudySettingsEntity,
     onSaveExamAttempt: (ExamAttemptEntity) -> Unit,
@@ -603,6 +641,7 @@ private fun ExamModeScreen(
     onExit: () -> Unit
 ) {
     var questionParts by remember { mutableStateOf<List<QuestionPartEntity>>(emptyList()) }
+    var examContentBlocks by remember { mutableStateOf<Map<String, List<QuestionContentBlockEntity>>>(emptyMap()) }
     var partsLoading by remember { mutableStateOf(true) }
     var partsLoadError by remember { mutableStateOf<String?>(null) }
     val examQuestionIdsKey = remember(questions) { questions.joinToString("|") { it.id } }
@@ -611,6 +650,7 @@ private fun ExamModeScreen(
         partsLoadError = null
         try {
             questionParts = loadQuestionParts(questions.map { it.id })
+            examContentBlocks = questions.filter { it.type == "Numerical" }.associate { q -> q.id to loadContentBlocks(q.id) }
         } catch (error: Exception) {
             questionParts = emptyList()
             partsLoadError = error.message ?: "Unable to load multipart exam data"
@@ -636,17 +676,33 @@ private fun ExamModeScreen(
     var started by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
     var confirmSubmit by remember { mutableStateOf(false) }
-    var startedAt by remember { mutableStateOf(0L) }
+    var startedAt by rememberSaveable { mutableStateOf(0L) }
     var attemptSaved by remember { mutableStateOf(false) }
 
     fun partsFor(q: QuestionEntity) = partsByQuestion[q.id].orEmpty()
+    fun numericalTemplateFor(q: QuestionEntity) = NumericalTemplateCodec.fromContentBlocks(q.id, examContentBlocks[q.id].orEmpty()).getOrNull()?.takeIf { it.authoringStatus == "VERIFIED" }
+    fun numericalVariantFor(q: QuestionEntity): NumericalTemplateEngine.Variant? {
+        val template = numericalTemplateFor(q) ?: return null
+        return NumericalTemplateAttemptRules.generate(template, "exam-$startedAt", q.id).getOrNull()
+    }
+    fun numericalMcqFor(q: QuestionEntity): NumericalTemplateEngine.MultipleChoiceVariant? {
+        val template = numericalTemplateFor(q) ?: return null
+        return NumericalTemplateEngine.generateMultipleChoice(template, NumericalTemplateAttemptRules.seedFor("exam-$startedAt", q.id)).getOrNull()
+    }
+    fun numericalIsCorrect(q: QuestionEntity, response: String): Boolean {
+        val template = numericalTemplateFor(q) ?: return response.trim().replace(",", "") == q.answer.trim().replace(",", "")
+        val mcq = numericalMcqFor(q)
+        if (mcq != null) return mcq.options.any { it.isCorrect && it.label == response }
+        val variant = numericalVariantFor(q) ?: return false
+        return NumericalTemplateEngine.isCorrect(template, variant, response)
+    }
     fun hasAnswer(q: QuestionEntity): Boolean = if (partsFor(q).isNotEmpty()) partsFor(q).any { answers[it.id]?.isNotBlank() == true } else answers[q.id]?.isNotBlank() == true
     fun earned(q: QuestionEntity): Double = if (partsFor(q).isNotEmpty()) {
         val qParts = partsFor(q)
         val answerMap = answers.filterKeys { key -> qParts.any { it.id == key } }
         val manual = qParts.mapNotNull { part -> manualPartScores[part.id]?.toDoubleOrNull()?.let { part.id to it } }.toMap()
         MultipartExamRules.score(qParts, answerMap, manual).earned
-    } else if (if (q.type == "Numerical") answers[q.id].orEmpty().trim().replace(",", "") == q.answer.trim().replace(",", "") else answers[q.id] == q.answer) 1.0 else 0.0
+    } else if (if (q.type == "Numerical") numericalIsCorrect(q, answers[q.id].orEmpty()) else answers[q.id] == q.answer) 1.0 else 0.0
     fun possible(q: QuestionEntity): Double = if (partsFor(q).isNotEmpty()) MultipartExamRules.score(partsFor(q), emptyMap()).possible else 1.0
     fun finishExam() {
         if (submitted) return
@@ -663,7 +719,7 @@ private fun ExamModeScreen(
     if (!started) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Exam mode", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("Timed exams support MCQs, true/false, exact-match numerical answers and multipart questions. Multipart scores use each part's assigned points.")
+            Text("Timed exams support MCQs, true/false, tolerance-graded numerical templates and multipart questions. Multipart scores use each part's assigned points.")
             if (partsLoading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Text("Loading multipart eligibility…", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -704,7 +760,7 @@ private fun ExamModeScreen(
                 Card(shape = RoundedCornerShape(16.dp)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("Question ${i + 1} • ${"%.2f".format(score)} / ${"%.2f".format(max)}${if (marked[q.id] == true) " • Marked" else ""}", fontWeight = FontWeight.Bold)
-                        RichContentText(q.prompt)
+                        RichContentText(numericalVariantFor(q)?.prompt ?: q.prompt)
                         if (qParts.isNotEmpty()) qParts.forEach { part ->
                             val response = answers[part.id].orEmpty()
                             val correct = MultipartExamRules.isCorrect(part, response)
@@ -727,7 +783,13 @@ private fun ExamModeScreen(
                             if (part.explanation.isNotBlank()) RichContentText(part.explanation)
                         } else {
                             Text("Your answer: ${answers[q.id] ?: "Not answered"}")
-                            Text("Correct answer: ${q.answer}", fontWeight = FontWeight.SemiBold)
+                            val generatedMcq = if (q.type == "Numerical") numericalMcqFor(q) else null
+                            val exactAnswer = generatedMcq?.options?.firstOrNull { it.isCorrect }?.label
+                                ?: if (q.type == "Numerical") numericalVariantFor(q)?.let { variant ->
+                                    val template = numericalTemplateFor(q)
+                                    NumericalTemplateEngine.format(variant.answer, template?.decimalPlaces ?: 2, template?.significantFigures ?: 0) + variant.answerUnit.let { if (it.isBlank()) "" else " $it" }
+                                } ?: q.answer else q.answer
+                            Text("Correct answer: $exactAnswer", fontWeight = FontWeight.SemiBold)
                             if (q.explanation.isNotBlank()) RichContentText(q.explanation)
                         }
                     }
@@ -740,11 +802,18 @@ private fun ExamModeScreen(
                             val qParts = partsFor(question)
                             put(JSONObject()
                                 .put("position", index + 1).put("questionId", question.id)
-                                .put("prompt", question.prompt).put("subject", question.subject)
+                                .put("prompt", numericalVariantFor(question)?.prompt ?: question.prompt).put("subject", question.subject)
                                 .put("chapter", question.chapter).put("topic", question.topic)
                                 .put("questionType", question.type).put("optionsJson", question.optionsJson)
+                                .put("generatedNumericalOptions", numericalMcqFor(question)?.let { generated -> JSONArray().apply { generated.options.forEach { put(JSONObject().put("label", it.label).put("correct", it.isCorrect)) } } } ?: JSONObject.NULL)
                                 .put("response", if (qParts.isEmpty()) answers[question.id].orEmpty() else "")
-                                .put("correctAnswer", if (qParts.isEmpty()) question.answer else "")
+                                .put("correctAnswer", if (qParts.isEmpty()) {
+                                    val template = numericalTemplateFor(question)
+                                    val variant = numericalVariantFor(question)
+                                    if (template != null && variant != null) NumericalTemplateEngine.format(variant.answer, template.decimalPlaces, template.significantFigures) + template.answerUnit.let { if (it.isBlank()) "" else " $it" } else question.answer
+                                } else "")
+                                .put("numericalAttemptSeed", if (numericalTemplateFor(question) != null) NumericalTemplateAttemptRules.seedFor("exam-$startedAt", question.id) else JSONObject.NULL)
+                                .put("numericalTemplateVersion", numericalTemplateFor(question)?.version ?: JSONObject.NULL)
                                 .put("earnedPoints", earned(question)).put("possiblePoints", possible(question))
                                 .put("answered", hasAnswer(question)).put("marked", marked[question.id] == true)
                                 .put("parts", JSONArray().apply {
@@ -807,7 +876,7 @@ private fun ExamModeScreen(
         }
         Card(shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                RichContentText(q.prompt, style = MaterialTheme.typography.titleLarge)
+                RichContentText(numericalVariantFor(q)?.prompt ?: q.prompt, style = MaterialTheme.typography.titleLarge)
                 if (q.latex.isNotBlank()) LatexFormulaView(q.latex, Modifier.fillMaxWidth())
                 if (qParts.isNotEmpty()) {
                     qParts.forEachIndexed { partIndex, part ->
@@ -826,7 +895,20 @@ private fun ExamModeScreen(
                         }
                     }
                 } else if (q.type == "Numerical") {
-                    OutlinedTextField(value = answers[q.id].orEmpty(), onValueChange = { answers[q.id] = it.take(100) }, label = { Text("Your numerical answer") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    val generatedMcq = numericalMcqFor(q)
+                    if (numericalTemplateFor(q) != null && generatedMcq == null) {
+                        Text("This numerical template could not generate a valid question and choice set.", color = MaterialTheme.colorScheme.error)
+                    } else if (generatedMcq != null) {
+                        generatedMcq.options.forEachIndexed { optionIndex, option ->
+                            Card(modifier = Modifier.fillMaxWidth().clickable { answers[q.id] = option.label }, colors = CardDefaults.cardColors(containerColor = if (answers[q.id] == option.label) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
+                                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("${('A'.code + optionIndex).toChar()}.  ", fontWeight = FontWeight.Bold); Text(option.label)
+                                }
+                            }
+                        }
+                    } else {
+                        OutlinedTextField(value = answers[q.id].orEmpty(), onValueChange = { answers[q.id] = it.take(100) }, label = { Text("Your numerical answer") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    }
                 } else {
                     options.forEachIndexed { optionIndex, option ->
                         Card(modifier = Modifier.fillMaxWidth().clickable { answers[q.id] = option }, colors = CardDefaults.cardColors(containerColor = if (answers[q.id] == option) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
@@ -973,6 +1055,42 @@ fun ProgressScreen(
                                         if (response.isNotBlank()) Text("Your answer: $response", style = MaterialTheme.typography.bodySmall)
                                         val expected = item.optString("correctAnswer")
                                         if (expected.isNotBlank()) Text("Expected: $expected", style = MaterialTheme.typography.bodySmall)
+                                        val generatedOptions = item.optJSONArray("generatedNumericalOptions")
+                                        if (generatedOptions != null && generatedOptions.length() > 0) {
+                                            Text("Generated numerical choices", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            for (optionIndex in 0 until generatedOptions.length()) {
+                                                val option = generatedOptions.optJSONObject(optionIndex) ?: continue
+                                                val label = option.optString("label")
+                                                val isCorrect = option.optBoolean("correct")
+                                                val isSelected = response == label
+                                                val marker = when {
+                                                    isCorrect && isSelected -> "✓ Correct • Your choice"
+                                                    isCorrect -> "✓ Correct answer"
+                                                    isSelected -> "✗ Your choice"
+                                                    else -> "•"
+                                                }
+                                                Text("$marker  $label", style = MaterialTheme.typography.bodySmall,
+                                                    color = if (isCorrect) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        } else {
+                                            val savedOptions = runCatching { JSONArray(item.optString("optionsJson", "[]")) }.getOrDefault(JSONArray())
+                                            if (savedOptions.length() > 0) {
+                                                Text("Choices", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                for (optionIndex in 0 until savedOptions.length()) {
+                                                    val label = savedOptions.optString(optionIndex)
+                                                    val isCorrect = label == expected
+                                                    val isSelected = response == label
+                                                    val marker = when {
+                                                        isCorrect && isSelected -> "✓ Correct • Your choice"
+                                                        isCorrect -> "✓ Correct answer"
+                                                        isSelected -> "✗ Your choice"
+                                                        else -> "•"
+                                                    }
+                                                    Text("$marker  $label", style = MaterialTheme.typography.bodySmall,
+                                                        color = if (isCorrect) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                        }
                                         val savedParts = item.optJSONArray("parts") ?: JSONArray()
                                         for (partIndex in 0 until savedParts.length()) {
                                             val part = savedParts.optJSONObject(partIndex) ?: continue
