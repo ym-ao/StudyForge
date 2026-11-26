@@ -40,6 +40,7 @@ jobs:
           python3 tools/verify_migration_12_13.py
           python3 tools/verify_migration_13_14.py
           python3 tools/verify_migration_14_15.py
+          python3 tools/verify_migration_15_16.py
           python3 tools/verify_backup_schema_15.py
           python3 tools/verify_backup_media_import.py
           python3 tools/verify_backup_snapshot.py
@@ -49,9 +50,20 @@ jobs:
           python3 tools/verify_bulk_selection.py
           python3 tools/verify_session_preset_edit.py
           python3 tools/verify_study_ui_performance.py
+          python3 tools/verify_navigation_layout.py
           python3 tools/verify_cloze_reimplementation.py
           python3 tools/verify_release_2_1_24.py
           python3 tools/verify_v2_source_integrity.py
+          python3 tools/verify_v3_paging_foundation.py
+          python3 tools/verify_v3_batch2_readiness.py
+          python3 tools/verify_v3_batch3_readiness.py
+          python3 tools/verify_v3_batch4_readiness.py
+          python3 tools/verify_v3_batch5_readiness.py
+          python3 tools/verify_v3_batch6_readiness.py
+          python3 tools/verify_v3_batch7_readiness.py
+          python3 tools/verify_v3_batch8_readiness.py
+          python3 tools/benchmark_v3_scalability.py
+          python3 tools/verify_v3_final_acceptance.py
 
       - name: Run Android lint
         run: gradle --no-daemon :app:lintDebug
@@ -84,7 +96,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
         with:
-          name: StudyForge-2.1.24-debug-apk
+          name: StudyForge-V3.0-dev-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
@@ -135,7 +147,7 @@ jobs:
         if: steps.signing.outputs.configured == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: StudyForge-2.1.24-release-apk
+          name: StudyForge-V3.0-dev-signed-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30

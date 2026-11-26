@@ -76,6 +76,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.studyforge.app.viewmodel.LibraryViewModel
+import com.studyforge.app.viewmodel.LibraryViewModelFactory
+import com.studyforge.app.data.QuestionRepository
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -83,14 +87,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.room.withTransaction
 import com.studyforge.app.data.CollectionEntity
 import com.studyforge.app.data.CollectionMembershipRules
 import com.studyforge.app.data.QuestionCollectionCrossRef
 import com.studyforge.app.data.QuestionEntity
 import com.studyforge.app.data.LibraryFilterCriteria
-import com.studyforge.app.data.QuestionLibraryFilter
-import com.studyforge.app.data.QuestionSelectionRules
 import com.studyforge.app.data.SavedFilterPresetEntity
 import com.studyforge.app.data.TagEntity
 import com.studyforge.app.data.QuestionContentBlockEntity
@@ -111,6 +114,8 @@ import com.studyforge.app.data.StudySettingsEntity
 import com.studyforge.app.data.ExamAttemptEntity
 import com.studyforge.app.data.recordGradedReview
 import com.studyforge.app.data.StudyDatabase
+import com.studyforge.app.data.HomeDashboardStats
+import com.studyforge.app.data.ProgressCoreStats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -119,7 +124,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-private data class NavItem(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+private data class NavItem(
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val contentDescription: String = label
+)
 private data class PendingTableImport(val uri: Uri, val anki: Boolean, val preview: QuestionInterchange.ImportPreview)
 private data class TableImportResult(val imported: Int, val updated: Int, val skipped: Int, val issues: List<QuestionInterchange.ImportIssue>)
 
@@ -131,20 +140,43 @@ fun StudyForgeApp(
     onThemeModeChange: (String) -> Unit = {}
 ) {
     val dao = database.dao()
+    val questionRepository = remember(dao) { QuestionRepository(dao) }
+    val libraryViewModel: LibraryViewModel = viewModel(factory = LibraryViewModelFactory(questionRepository))
     val appContext = LocalContext.current
-    val questions by dao.observeQuestions().collectAsState(initial = emptyList())
+    val aggregateClock = System.currentTimeMillis()
+    val homeStats by dao.observeHomeDashboardStats(aggregateClock).collectAsState(
+        initial = HomeDashboardStats(0, 0, 0, 0)
+    )
+    val progressStats by dao.observeProgressCoreStats(
+        now = aggregateClock,
+        thirtyDayCutoff = aggregateClock - 30L * 24L * 60L * 60L * 1000L,
+        sevenDayCutoff = aggregateClock - 7L * 24L * 60L * 60L * 1000L
+    ).collectAsState(initial = ProgressCoreStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
     val collections by dao.observeCollections().collectAsState(initial = emptyList())
-    val reviewLogs by dao.observeReviewLogs().collectAsState(initial = emptyList())
-    val examAttempts by dao.observeExamAttempts().collectAsState(initial = emptyList())
+    val localCalendar = remember(aggregateClock / 60_000L) { java.util.Calendar.getInstance().apply {
+        timeInMillis = aggregateClock; set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis }
+    val dailyQuotaStats by dao.observeStudyDailyQuotaStats(localCalendar).collectAsState(initial = com.studyforge.app.data.StudyDailyQuotaStats(0, 0))
+    val progressTypeAccuracy by dao.observeProgressTypeAccuracy().collectAsState(initial = emptyList())
+    val progressWeakTopics by dao.observeProgressWeakTopics().collectAsState(initial = emptyList())
+    val progressWeakSubjects by dao.observeProgressWeakSubjects().collectAsState(initial = emptyList())
+    val progressWeakChapters by dao.observeProgressWeakChapters().collectAsState(initial = emptyList())
+    val progressMistakes by dao.observeProgressMistakeCategories().collectAsState(initial = emptyList())
+    val progressRecentReviews by dao.observeProgressRecentReviews().collectAsState(initial = emptyList())
+    val progressDailyStart = remember(aggregateClock / 60_000L) { java.time.LocalDate.now().minusDays(13).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() }
+    val progressDailyReviews by dao.observeProgressDailyReviews(progressDailyStart).collectAsState(initial = emptyList())
+    val progressExamStats by dao.observeProgressExamStats().collectAsState(initial = com.studyforge.app.data.ProgressExamStats(0, 0.0, 0.0, 0.0, null, 0, 0, 0, 0))
+    val progressExamResponseStats by dao.observeProgressExamResponseStats().collectAsState(initial = com.studyforge.app.data.ProgressExamResponseStats(0, 0))
+    val recentExamAttempts by dao.observeRecentExamAttempts().collectAsState(initial = emptyList())
     val links by dao.observeLinks().collectAsState(initial = emptyList())
     val savedFilterPresets by dao.observeSavedFilterPresets().collectAsState(initial = emptyList())
     val tags by dao.observeTags().collectAsState(initial = emptyList())
-    val allContentBlocks by dao.observeContentBlocks().collectAsState(initial = emptyList())
-    val allQuestionParts by dao.observeQuestionParts().collectAsState(initial = emptyList())
     val studySessionPresets by dao.observeStudySessionPresets().collectAsState(initial = emptyList())
-    LaunchedEffect(questions) {
-        val discovered = TagText.names(questions)
-            .map { name -> TagEntity(id = name.lowercase(), name = name) }
+    val studyTopics by dao.observeStudyTopics().collectAsState(initial = emptyList())
+    val questionTagNames by dao.observeQuestionTagNames().collectAsState(initial = emptyList())
+    LaunchedEffect(questionTagNames) {
+        val discovered = questionTagNames.map { name -> TagEntity(id = name.lowercase(), name = name) }
         if (discovered.isNotEmpty()) dao.upsertTags(discovered)
     }
     val storedSettings by dao.observeSettings().collectAsState(initial = null)
@@ -157,16 +189,25 @@ fun StudyForgeApp(
     var pendingTableImport by remember { mutableStateOf<PendingTableImport?>(null) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var editorId by rememberSaveable { mutableStateOf<String?>(null) }
+    var editorQuestion by remember { mutableStateOf<QuestionEntity?>(null) }
     val questionVersions by dao.observeQuestionVersions(editorId ?: "").collectAsState(initial = emptyList())
     var editorOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(editorOpen, editorId) {
+        editorQuestion = null
+        if (editorOpen && editorId != null) editorQuestion = dao.getQuestion(editorId!!)
+    }
     var editorSessionKey by rememberSaveable { mutableIntStateOf(0) }
     var editorCollectionIds by remember { mutableStateOf(emptyList<String>()) }
     var editorContentBlocks by remember { mutableStateOf(emptyList<QuestionContentBlockEntity>()) }
     var editorQuestionParts by remember { mutableStateOf(emptyList<QuestionPartEntity>()) }
 
     if (editorOpen) {
-        val current = questions.firstOrNull { it.id == editorId }
-        key(editorSessionKey) {
+        val current = editorQuestion
+        if (editorId != null && current == null) {
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text("Loading question…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else key(editorSessionKey) {
         QuestionEditor(
             initial = current,
             initialCollectionIds = editorCollectionIds,
@@ -258,10 +299,12 @@ fun StudyForgeApp(
     val navItems = listOf(
         NavItem("Home", Icons.Default.Home),
         NavItem("Library", Icons.Default.Book),
-        NavItem("Collections", Icons.Default.Folder),
+        // Short display labels keep all seven destinations readable on narrow phones.
+        // Full names remain available to TalkBack through contentDescription.
+        NavItem("Folders", Icons.Default.Folder, "Collections"),
         NavItem("Study", Icons.Default.School),
         NavItem("Backup", Icons.Default.ImportExport),
-        NavItem("Progress", Icons.Default.Insights),
+        NavItem("Stats", Icons.Default.Insights, "Progress"),
         NavItem("Settings", Icons.Default.Settings)
     )
 
@@ -283,8 +326,16 @@ fun StudyForgeApp(
                     NavigationBarItem(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) }
+                        icon = { Icon(item.icon, contentDescription = item.contentDescription) },
+                        label = {
+                            Text(
+                                text = item.label,
+                                maxLines = 1,
+                                softWrap = false,
+                                fontSize = 10.sp,
+                                letterSpacing = (-0.2).sp
+                            )
+                        }
                     )
                 }
             }
@@ -300,26 +351,36 @@ fun StudyForgeApp(
         Column(Modifier.fillMaxSize().padding(padding)) {
             when (selectedTab) {
                 0 -> HomeScreen(
-                    questionCount = questions.size,
-                    collectionCount = collections.size,
-                    reviewCount = questions.sumOf { it.reviewCount },
-                    dueCount = questions.count { it.dueAt == null || it.dueAt <= System.currentTimeMillis() },
+                    questionCount = homeStats.questionCount,
+                    collectionCount = homeStats.collectionCount,
+                    reviewCount = homeStats.reviewCount,
+                    dueCount = homeStats.dueCount,
                     onAdd = { editorCollectionIds = emptyList(); editorContentBlocks = emptyList(); editorQuestionParts = emptyList(); editorId = null; editorSessionKey += 1; editorOpen = true },
                     onLibrary = { selectedTab = 1 },
                     onStudy = { selectedTab = 3 }
                 )
-                1 -> LibraryScreen(
-                    questions = questions,
-                    collections = collections,
-                    links = links,
+                1 -> PagedLibraryScreen(
+                    viewModel = libraryViewModel,
                     savedFilterPresets = savedFilterPresets,
+                    collections = collections,
                     tags = tags,
+                    onSavePreset = { name, criteria ->
+                        scope.launch {
+                            val existing = dao.getAllSavedFilterPresets().firstOrNull { it.name.equals(name.trim(), true) }
+                            dao.upsertSavedFilterPreset(SavedFilterPresetEntity.fromCriteria(
+                                id = existing?.id ?: UUID.randomUUID().toString(), name = name.trim(), criteria = criteria,
+                                createdAt = existing?.createdAt ?: System.currentTimeMillis(), updatedAt = System.currentTimeMillis()
+                            ))
+                            snackbar.showSnackbar(if (existing == null) "Filter preset saved" else "Filter preset updated")
+                        }
+                    },
+                    onDeletePreset = { preset -> scope.launch { dao.deleteSavedFilterPreset(preset.id) } },
                     onAddTag = { name -> scope.launch { dao.upsertTag(TagEntity(name.lowercase(), name)); snackbar.showSnackbar("Tag added") } },
                     onRenameTag = { old, new -> scope.launch {
                         database.withTransaction {
-                            dao.getAllQuestions().forEach { q ->
-                                val updated = TagText.rename(q.tagsCsv, old, new)
-                                if (updated != q.tagsCsv) dao.upsertQuestion(q.copy(tagsCsv = updated, updatedAt = System.currentTimeMillis()))
+                            dao.getQuestionsUsingTag(old).forEach { question ->
+                                val updated = TagText.rename(question.tagsCsv, old, new)
+                                if (updated != question.tagsCsv) dao.upsertQuestion(question.copy(tagsCsv = updated, updatedAt = System.currentTimeMillis()))
                             }
                             dao.deleteTag(old.lowercase()); dao.upsertTag(TagEntity(new.lowercase(), new))
                         }
@@ -327,42 +388,38 @@ fun StudyForgeApp(
                     } },
                     onDeleteTag = { tag -> scope.launch {
                         database.withTransaction {
-                            dao.getAllQuestions().forEach { q ->
-                                val updated = TagText.remove(q.tagsCsv, tag.name)
-                                if (updated != q.tagsCsv) dao.upsertQuestion(q.copy(tagsCsv = updated, updatedAt = System.currentTimeMillis()))
+                            dao.getQuestionsUsingTag(tag.name).forEach { question ->
+                                val updated = TagText.remove(question.tagsCsv, tag.name)
+                                if (updated != question.tagsCsv) dao.upsertQuestion(question.copy(tagsCsv = updated, updatedAt = System.currentTimeMillis()))
                             }
                             dao.deleteTag(tag.id)
                         }
                         snackbar.showSnackbar("Tag deleted and removed from questions")
                     } },
-                    onSavePreset = { name, criteria ->
-                        scope.launch {
-                            val existing = savedFilterPresets.firstOrNull { it.name.equals(name.trim(), ignoreCase = true) }
-                            val preset = SavedFilterPresetEntity.fromCriteria(
-                                id = existing?.id ?: UUID.randomUUID().toString(),
-                                name = name.trim(), criteria = criteria,
-                                createdAt = existing?.createdAt ?: System.currentTimeMillis(),
-                                updatedAt = System.currentTimeMillis()
-                            )
-                            dao.upsertSavedFilterPreset(preset)
-                            snackbar.showSnackbar(if (existing == null) "Filter preset saved" else "Filter preset updated")
-                        }
-                    },
-                    onDeletePreset = { preset -> scope.launch { dao.deleteSavedFilterPreset(preset.id); snackbar.showSnackbar("Preset deleted") } },
-                    onManualSchedule = { question, action -> scope.launch {
+                    onOpenQuestion = { id -> scope.launch {
+                        val question = dao.getQuestion(id)
+                        if (question != null) {
+                            editorCollectionIds = dao.getCollectionIds(id)
+                            editorContentBlocks = dao.getContentBlocks(id)
+                            editorQuestionParts = dao.getQuestionParts(id)
+                            editorId = id; editorSessionKey += 1; editorOpen = true
+                        } else snackbar.showSnackbar("Question no longer exists")
+                    } },
+                    onDeleteQuestion = { id -> scope.launch { dao.deleteQuestion(id); snackbar.showSnackbar("Question deleted") } },
+                    onScheduleQuestion = { id, action -> scope.launch {
+                        val question = dao.getQuestion(id) ?: return@launch
                         val updated = when (action) {
                             "now" -> ManualScheduleRules.setDue(question, System.currentTimeMillis())
-                            "tomorrow" -> ManualScheduleRules.setDue(question, System.currentTimeMillis() + 86_400_000L)
                             "week" -> ManualScheduleRules.setDue(question, System.currentTimeMillis() + 7L * 86_400_000L)
                             else -> ManualScheduleRules.reset(question)
                         }
                         dao.upsertQuestion(updated)
                         snackbar.showSnackbar(if (action == "reset") "Scheduling reset; review history retained" else "Question rescheduled")
                     } },
-                    onBulkUpdate = { selected, status, difficulty -> scope.launch {
+                    onBulkUpdate = { ids, status, difficulty -> scope.launch {
+                        var updatedCount = 0
                         database.withTransaction {
-                            selected.forEach { selectedQuestion ->
-                                val current = dao.getQuestion(selectedQuestion.id) ?: selectedQuestion
+                            ids.chunked(900).flatMap { dao.getQuestionsByIds(it) }.forEach { current ->
                                 val updated = current.copy(status = status ?: current.status, difficulty = difficulty ?: current.difficulty, updatedAt = System.currentTimeMillis())
                                 if (current.copy(updatedAt = updated.updatedAt) != updated) {
                                     dao.insertQuestionVersion(QuestionVersionEntity(
@@ -370,20 +427,19 @@ fun StudyForgeApp(
                                         versionNumber = dao.nextQuestionVersion(current.id), savedAt = System.currentTimeMillis(),
                                         snapshotJson = QuestionVersionRules.createSnapshot(current, dao.getContentBlocks(current.id), dao.getQuestionParts(current.id), dao.getCollectionIds(current.id))
                                     ))
+                                    dao.upsertQuestion(updated); updatedCount++
                                 }
-                                dao.upsertQuestion(updated)
                             }
                         }
-                        snackbar.showSnackbar("Updated ${selected.size} question(s)")
+                        snackbar.showSnackbar("Updated $updatedCount question(s)")
                     } },
-                    onBulkTag = { selected, tagName, add -> scope.launch {
+                    onBulkTag = { ids, tagName, add -> scope.launch {
                         val normalized = tagName.trim()
                         if (normalized.isNotEmpty() && !normalized.contains(',')) {
                             var changedCount = 0
                             database.withTransaction {
                                 if (add) dao.upsertTag(TagEntity(normalized.lowercase(), normalized))
-                                selected.forEach { selectedQuestion ->
-                                    val current = dao.getQuestion(selectedQuestion.id) ?: return@forEach
+                                ids.chunked(900).flatMap { dao.getQuestionsByIds(it) }.forEach { current ->
                                     val updatedTags = if (add) TagText.add(current.tagsCsv, normalized) else TagText.remove(current.tagsCsv, normalized)
                                     if (updatedTags != current.tagsCsv) {
                                         dao.insertQuestionVersion(QuestionVersionEntity(
@@ -399,46 +455,35 @@ fun StudyForgeApp(
                             snackbar.showSnackbar(if (add) "Tag added to $changedCount question(s)" else "Tag removed from $changedCount question(s)")
                         }
                     } },
-                    onBulkCollection = { selected, collectionId, add -> scope.launch {
+                    onBulkCollection = { ids, collectionId, add -> scope.launch {
                         var changedCount = 0
                         try {
                             database.withTransaction {
-                                val validCollectionIds = dao.getAllCollections().map { it.id }.toSet()
-                                if (collectionId in validCollectionIds) {
-                                    selected.forEach { selectedQuestion ->
-                                        val current = dao.getQuestion(selectedQuestion.id) ?: return@forEach
-                                        val oldIds = dao.getCollectionIds(current.id)
-                                        // A legacy/stale link must not be re-inserted after the links are replaced.
-                                        val safeOldIds = oldIds.filter { it in validCollectionIds }
-                                        val newIds = CollectionMembershipRules.update(safeOldIds, collectionId, add)
-                                        if (newIds.toSet() != oldIds.toSet()) {
-                                            dao.insertQuestionVersion(QuestionVersionEntity(
-                                                id = UUID.randomUUID().toString(), questionId = current.id,
-                                                versionNumber = dao.nextQuestionVersion(current.id), savedAt = System.currentTimeMillis(),
-                                                snapshotJson = QuestionVersionRules.createSnapshot(current, dao.getContentBlocks(current.id), dao.getQuestionParts(current.id), oldIds)
-                                            ))
-                                            dao.clearQuestionCollections(current.id)
-                                            if (newIds.isNotEmpty()) dao.insertLinks(newIds.map { QuestionCollectionCrossRef(current.id, it) })
-                                            dao.upsertQuestion(current.copy(updatedAt = System.currentTimeMillis()))
-                                            changedCount++
-                                        }
-                                    }
+                            val validIds = dao.getAllCollections().map { it.id }.toSet()
+                            if (collectionId in validIds) ids.chunked(900).flatMap { dao.getQuestionsByIds(it) }.forEach { current ->
+                                val oldIds = dao.getCollectionIds(current.id)
+                                val safeOldIds = oldIds.filter { it in validIds }
+                                val newIds = CollectionMembershipRules.update(safeOldIds, collectionId, add)
+                                if (newIds.toSet() != oldIds.toSet()) {
+                                    dao.insertQuestionVersion(QuestionVersionEntity(
+                                        id = UUID.randomUUID().toString(), questionId = current.id,
+                                        versionNumber = dao.nextQuestionVersion(current.id), savedAt = System.currentTimeMillis(),
+                                        snapshotJson = QuestionVersionRules.createSnapshot(current, dao.getContentBlocks(current.id), dao.getQuestionParts(current.id), oldIds)
+                                    ))
+                                    dao.clearQuestionCollections(current.id)
+                                    if (newIds.isNotEmpty()) dao.insertLinks(newIds.map { QuestionCollectionCrossRef(current.id, it) })
+                                    dao.upsertQuestion(current.copy(updatedAt = System.currentTimeMillis()))
+                                    changedCount++
                                 }
                             }
-                            snackbar.showSnackbar(if (add) "Added $changedCount question(s) to collection" else "Removed $changedCount question(s) from collection")
+                            }
                         } catch (error: Exception) {
                             snackbar.showSnackbar("Collection update failed: ${error.message ?: "database error"}")
+                            return@launch
                         }
+                        snackbar.showSnackbar(if (add) "Added $changedCount question(s) to collection" else "Removed $changedCount question(s) from collection")
                     } },
-                    onEdit = { question -> scope.launch {
-                        editorCollectionIds = dao.getCollectionIds(question.id)
-                        editorContentBlocks = dao.getContentBlocks(question.id)
-                        editorQuestionParts = dao.getQuestionParts(question.id)
-                        editorId = question.id
-                        editorSessionKey += 1
-                        editorOpen = true
-                    } },
-                    onDelete = { question -> scope.launch { dao.deleteQuestion(question.id); snackbar.showSnackbar("Question deleted") } }
+                    onAddQuestion = { editorCollectionIds = emptyList(); editorContentBlocks = emptyList(); editorQuestionParts = emptyList(); editorId = null; editorSessionKey += 1; editorOpen = true }
                 )
                 2 -> CollectionsScreen(
                     collections = collections,
@@ -451,13 +496,15 @@ fun StudyForgeApp(
                     onDelete = { collection -> scope.launch { database.withTransaction { dao.clearStudySessionCollection(collection.id); dao.deleteCollection(collection.id) } } }
                 )
                 3 -> StudyScreen(
-                    questions = questions,
-                    reviewLogs = reviewLogs,
-                    contentBlocks = allContentBlocks,
-                    questionParts = allQuestionParts,
+                    topics = studyTopics,
+                    createStudyQueueIds = { query, now -> questionRepository.createStudyQueueSnapshot(query, now) },
+                    loadStudyQueueCards = { ids -> questionRepository.loadStudyQueueCards(ids) },
+                    newReviewedToday = dailyQuotaStats.newReviewed,
+                    reviewsToday = dailyQuotaStats.reviewCount,
+                    loadContentBlocks = { questionId -> dao.getContentBlocks(questionId) },
+                    loadQuestionParts = { questionIds -> dao.getQuestionPartsForQuestions(questionIds) },
                     sessionPresets = studySessionPresets,
                     collections = collections,
-                    collectionLinks = links,
                     settings = studySettings,
                     onSaveSessionPreset = { preset -> scope.launch { dao.upsertStudySessionPreset(preset); snackbar.showSnackbar("Study session saved") } },
                     onDeleteSessionPreset = { preset -> scope.launch { dao.deleteStudySessionPreset(preset.id); snackbar.showSnackbar("Study session deleted") } },
@@ -487,7 +534,14 @@ fun StudyForgeApp(
                         } catch (e: Exception) { snackbar.showSnackbar("Anki preview failed: ${e.message ?: "invalid file"}") }
                     } }
                 )
-                5 -> ProgressScreen(questions = questions, reviewLogs = reviewLogs, examAttempts = examAttempts)
+                5 -> ProgressScreen(
+                    coreStats = progressStats, typeAccuracy = progressTypeAccuracy,
+                    weakTopics = progressWeakTopics, weakSubjects = progressWeakSubjects,
+                    weakChapters = progressWeakChapters, mistakes = progressMistakes,
+                    recentReviews = progressRecentReviews, dailyReviews = progressDailyReviews,
+                    examStats = progressExamStats, examResponseStats = progressExamResponseStats,
+                    recentExamAttempts = recentExamAttempts
+                )
                 6 -> SettingsScreen(
                     settings = studySettings,
                     themeMode = themeMode,
@@ -602,410 +656,6 @@ private fun ActionCard(title: String, description: String, icon: androidx.compos
 }
 
 @Composable
-private fun LibraryScreen(
-    questions: List<QuestionEntity>,
-    collections: List<CollectionEntity>,
-    links: List<QuestionCollectionCrossRef>,
-    savedFilterPresets: List<SavedFilterPresetEntity>,
-    tags: List<TagEntity>,
-    onAddTag: (String) -> Unit,
-    onRenameTag: (String, String) -> Unit,
-    onDeleteTag: (TagEntity) -> Unit,
-    onSavePreset: (String, LibraryFilterCriteria) -> Unit,
-    onDeletePreset: (SavedFilterPresetEntity) -> Unit,
-    onManualSchedule: (QuestionEntity, String) -> Unit,
-    onBulkUpdate: (List<QuestionEntity>, String?, String?) -> Unit,
-    onBulkTag: (List<QuestionEntity>, String, Boolean) -> Unit,
-    onBulkCollection: (List<QuestionEntity>, String, Boolean) -> Unit,
-    onEdit: (QuestionEntity) -> Unit,
-    onDelete: (QuestionEntity) -> Unit
-) {
-    var search by rememberSaveable { mutableStateOf("") }
-    var appliedSearch by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(search) {
-        delay(180)
-        appliedSearch = search
-    }
-    var typeFilter by rememberSaveable { mutableStateOf("All") }
-    var statusFilter by rememberSaveable { mutableStateOf("All") }
-    var subjectFilter by rememberSaveable { mutableStateOf("") }
-    var chapterFilter by rememberSaveable { mutableStateOf("") }
-    var topicFilter by rememberSaveable { mutableStateOf("") }
-    var tagFilter by rememberSaveable { mutableStateOf("") }
-    var difficultyFilter by rememberSaveable { mutableStateOf("All") }
-    var examFilter by rememberSaveable { mutableStateOf("") }
-    var performanceFilter by rememberSaveable { mutableStateOf("All") }
-    var sourceTitleFilter by rememberSaveable { mutableStateOf("") }
-    var sourceDetailFilter by rememberSaveable { mutableStateOf("") }
-    var createdAfterFilter by rememberSaveable { mutableStateOf("") }
-    var createdBeforeFilter by rememberSaveable { mutableStateOf("") }
-    var updatedAfterFilter by rememberSaveable { mutableStateOf("") }
-    var updatedBeforeFilter by rememberSaveable { mutableStateOf("") }
-    var selectedCollectionId by rememberSaveable { mutableStateOf("") }
-    var collectionMenu by remember { mutableStateOf(false) }
-    var showFilters by rememberSaveable { mutableStateOf(false) }
-    var showSavePreset by remember { mutableStateOf(false) }
-    var showManagePresets by remember { mutableStateOf(false) }
-    var presetPendingDelete by remember { mutableStateOf<SavedFilterPresetEntity?>(null) }
-    var presetName by remember { mutableStateOf("") }
-    var showTagManager by remember { mutableStateOf(false) }
-    var newTagName by remember { mutableStateOf("") }
-    var editingTag by remember { mutableStateOf<TagEntity?>(null) }
-    var editedTagName by remember { mutableStateOf("") }
-    var deletingTag by remember { mutableStateOf<TagEntity?>(null) }
-    var selectionMode by rememberSaveable { mutableStateOf(false) }
-    var selectedQuestionIds by remember { mutableStateOf(setOf<String>()) }
-    var showBulkTagDialog by remember { mutableStateOf(false) }
-    var bulkTagName by remember { mutableStateOf("") }
-    var bulkTagAdd by remember { mutableStateOf(true) }
-    var showBulkCollectionDialog by remember { mutableStateOf(false) }
-    var bulkCollectionAdd by remember { mutableStateOf(true) }
-    var bulkCollectionId by remember { mutableStateOf("") }
-    var bulkCollectionMenu by remember { mutableStateOf(false) }
-
-    val collectionId = selectedCollectionId.takeIf { it.isNotBlank() }
-    val selectedCollectionLabel = collections.firstOrNull { it.id == collectionId }?.name ?: "All collections"
-    val collectionQuestionIds = remember(links, collectionId) {
-        if (collectionId == null) emptySet() else links.filter { it.collectionId == collectionId }.map { it.questionId }.toSet()
-    }
-    val criteria = LibraryFilterCriteria(
-        query = appliedSearch, type = typeFilter, status = statusFilter, subject = subjectFilter,
-        chapter = chapterFilter, topic = topicFilter, tag = tagFilter, collectionId = collectionId,
-        difficulty = difficultyFilter, exam = examFilter, performance = performanceFilter,
-        sourceTitle = sourceTitleFilter, sourceDetail = sourceDetailFilter,
-        createdAfter = createdAfterFilter, createdBefore = createdBeforeFilter,
-        updatedAfter = updatedAfterFilter, updatedBefore = updatedBeforeFilter
-    )
-    var filtered by remember { mutableStateOf(emptyList<QuestionEntity>()) }
-    var filtering by remember { mutableStateOf(true) }
-    LaunchedEffect(questions, criteria, collectionQuestionIds) {
-        filtering = true
-        val result = withContext(Dispatchers.Default) {
-            questions.filter { q -> QuestionLibraryFilter.matches(q, criteria, collectionQuestionIds) }
-        }
-        filtered = result
-        filtering = false
-    }
-    var liveFilterMatchCounts by remember { mutableStateOf(emptyMap<String, Int>()) }
-    LaunchedEffect(questions, links, savedFilterPresets) {
-        liveFilterMatchCounts = withContext(Dispatchers.Default) {
-            savedFilterPresets.associate { preset ->
-                val savedCriteria = preset.toCriteria()
-                val presetCollectionIds = savedCriteria.collectionId?.let { id ->
-                    links.asSequence().filter { it.collectionId == id }.map { it.questionId }.toSet()
-                } ?: emptySet()
-                preset.id to QuestionLibraryFilter.countMatches(questions, savedCriteria, presetCollectionIds)
-            }
-        }
-    }
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        OutlinedTextField(value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Search questions") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = { showTagManager = true }) { Text("Manage tags (${tags.size})") }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            Text("Live smart filters (${savedFilterPresets.size})", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-            TextButton(onClick = { presetName = ""; showSavePreset = true }) { Text("Save smart filter") }
-            TextButton(onClick = { showManagePresets = true }, enabled = savedFilterPresets.isNotEmpty()) { Text("Manage") }
-        }
-        if (savedFilterPresets.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                savedFilterPresets.forEach { preset ->
-                    FilterChip(selected = false, onClick = {
-                        val saved = preset.toCriteria()
-                        search = saved.query; typeFilter = saved.type; statusFilter = saved.status
-                        subjectFilter = saved.subject; chapterFilter = saved.chapter; topicFilter = saved.topic
-                        tagFilter = saved.tag; selectedCollectionId = saved.collectionId.orEmpty()
-                        difficultyFilter = saved.difficulty; examFilter = saved.exam
-                        performanceFilter = saved.performance
-                        sourceTitleFilter = saved.sourceTitle; sourceDetailFilter = saved.sourceDetail
-                        createdAfterFilter = saved.createdAfter; createdBeforeFilter = saved.createdBefore
-                        updatedAfterFilter = saved.updatedAfter; updatedBeforeFilter = saved.updatedBefore
-                        showFilters = true
-                    }, label = { Text("${preset.name} · ${liveFilterMatchCounts[preset.id] ?: 0}") })
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-            listOf("All", "Flashcard", "MCQ", "True/False", "Numerical", "Cloze").forEach { type -> FilterChip(selected = typeFilter == type, onClick = { typeFilter = type }, label = { Text(type) }) }
-            FilterChip(selected = showFilters, onClick = { showFilters = !showFilters }, label = { Text(if (showFilters) "Hide filters" else "More filters") })
-        }
-        if (showFilters) {
-            Column(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Collection", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                    Box {
-                        OutlinedButton(onClick = { collectionMenu = true }) { Text(selectedCollectionLabel) }
-                        DropdownMenu(expanded = collectionMenu, onDismissRequest = { collectionMenu = false }) {
-                            DropdownMenuItem(text = { Text("All collections") }, onClick = { selectedCollectionId = ""; collectionMenu = false })
-                            collections.forEach { c -> DropdownMenuItem(text = { Text(c.name) }, onClick = { selectedCollectionId = c.id; collectionMenu = false }) }
-                        }
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    listOf("All", "Draft", "Unverified", "Verified", "Incorrect", "Archived").forEach { status -> FilterChip(selected = statusFilter == status, onClick = { statusFilter = status }, label = { Text(status) }) }
-                }
-                OutlinedTextField(subjectFilter, { subjectFilter = it }, label = { Text("Subject filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(chapterFilter, { chapterFilter = it }, label = { Text("Chapter filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(topicFilter, { topicFilter = it }, label = { Text("Topic filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(tagFilter, { tagFilter = it }, label = { Text("Tag filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(examFilter, { examFilter = it }, label = { Text("Exam / syllabus filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(sourceTitleFilter, { sourceTitleFilter = it }, label = { Text("Source title filter") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(sourceDetailFilter, { sourceDetailFilter = it }, label = { Text("Source reference filter (chapter / page / URL)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text("Created date range (YYYY-MM-DD)", style = MaterialTheme.typography.labelLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(createdAfterFilter, { createdAfterFilter = it.take(10) }, label = { Text("Created from") }, singleLine = true, modifier = Modifier.weight(1f))
-                    OutlinedTextField(createdBeforeFilter, { createdBeforeFilter = it.take(10) }, label = { Text("Created to") }, singleLine = true, modifier = Modifier.weight(1f))
-                }
-                Text("Modified date range (YYYY-MM-DD)", style = MaterialTheme.typography.labelLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(updatedAfterFilter, { updatedAfterFilter = it.take(10) }, label = { Text("Modified from") }, singleLine = true, modifier = Modifier.weight(1f))
-                    OutlinedTextField(updatedBeforeFilter, { updatedBeforeFilter = it.take(10) }, label = { Text("Modified to") }, singleLine = true, modifier = Modifier.weight(1f))
-                }
-                Text("Difficulty")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    listOf("All", "Easy", "Medium", "Hard", "Unrated").forEach { value -> FilterChip(selected = difficultyFilter == value, onClick = { difficultyFilter = value }, label = { Text(value) }) }
-                }
-                Text("Performance")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    listOf("All", "Unattempted", "Weak", "Strong").forEach { value -> FilterChip(selected = performanceFilter == value, onClick = { performanceFilter = value }, label = { Text(value) }) }
-                }
-                TextButton(onClick = { subjectFilter = ""; chapterFilter = ""; topicFilter = ""; tagFilter = ""; examFilter = ""; sourceTitleFilter = ""; sourceDetailFilter = ""; createdAfterFilter = ""; createdBeforeFilter = ""; updatedAfterFilter = ""; updatedBeforeFilter = ""; difficultyFilter = "All"; performanceFilter = "All"; statusFilter = "All"; selectedCollectionId = ""; typeFilter = "All"; search = "" }) { Text("Clear all filters") }
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("${filtered.size} of ${questions.size} questions${if (filtering) " · filtering" else ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            TextButton(onClick = { selectionMode = !selectionMode; selectedQuestionIds = emptySet() }) { Text(if (selectionMode) "Done selecting" else "Select multiple") }
-        }
-        if (selectionMode) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("${selectedQuestionIds.size} selected", style = MaterialTheme.typography.labelMedium)
-                TextButton(onClick = { selectedQuestionIds = if (selectedQuestionIds.size == filtered.size) emptySet() else filtered.map { it.id }.toSet() }) { Text(if (selectedQuestionIds.size == filtered.size) "Clear" else "Select visible") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                listOf("Draft", "Verified", "Incorrect", "Archived").forEach { value ->
-                    FilterChip(selected = false, onClick = { val selected = QuestionSelectionRules.resolve(questions, selectedQuestionIds); if (selected.isNotEmpty()) { onBulkUpdate(selected, value, null); selectedQuestionIds = emptySet() } }, label = { Text("Set $value") }, enabled = selectedQuestionIds.isNotEmpty())
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                listOf("Easy", "Medium", "Hard", "Unrated").forEach { value ->
-                    FilterChip(selected = false, onClick = { val selected = QuestionSelectionRules.resolve(questions, selectedQuestionIds); if (selected.isNotEmpty()) { onBulkUpdate(selected, null, value); selectedQuestionIds = emptySet() } }, label = { Text(value) }, enabled = selectedQuestionIds.isNotEmpty())
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { bulkTagAdd = true; bulkTagName = ""; showBulkTagDialog = true }, enabled = selectedQuestionIds.isNotEmpty()) { Text("Add tag") }
-                OutlinedButton(onClick = { bulkTagAdd = false; bulkTagName = ""; showBulkTagDialog = true }, enabled = selectedQuestionIds.isNotEmpty()) { Text("Remove tag") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { bulkCollectionAdd = true; bulkCollectionId = ""; showBulkCollectionDialog = true }, enabled = selectedQuestionIds.isNotEmpty() && collections.isNotEmpty()) { Text("Add to collection") }
-                OutlinedButton(onClick = { bulkCollectionAdd = false; bulkCollectionId = ""; showBulkCollectionDialog = true }, enabled = selectedQuestionIds.isNotEmpty() && collections.isNotEmpty()) { Text("Remove from collection") }
-            }
-        }
-        if (filtered.isEmpty()) {
-            EmptyState("No questions found", if (questions.isEmpty()) "Tap + to create your first question." else "Try a different search or filter.")
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 90.dp)) {
-                items(filtered, key = { it.id }) { q ->
-                    var scheduleMenu by remember(q.id) { mutableStateOf(false) }
-                    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().clickable { if (selectionMode) selectedQuestionIds = if (q.id in selectedQuestionIds) selectedQuestionIds - q.id else selectedQuestionIds + q.id else onEdit(q) }) {
-                        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (selectionMode) Checkbox(checked = q.id in selectedQuestionIds, onCheckedChange = { checked -> selectedQuestionIds = if (checked) selectedQuestionIds + q.id else selectedQuestionIds - q.id })
-                                Text(q.type, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                                Spacer(Modifier.weight(1f))
-                                Text(q.status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                if (!selectionMode) {
-                                    IconButton(onClick = { onEdit(q) }, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Edit, "Edit") }
-                                    IconButton(onClick = { onDelete(q) }, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Delete, "Delete") }
-                                }
-                            }
-                            RichContentText(q.prompt.take(360).let { preview -> if (q.prompt.length > 360) "$preview…" else preview }, style = MaterialTheme.typography.titleMedium)
-                            val meta = listOf(q.subject, q.chapter, q.topic, q.exam).filter { it.isNotBlank() }.joinToString(" • ")
-                            if (meta.isNotBlank()) Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Difficulty: ${q.difficulty}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.weight(1f))
-                                if (!selectionMode) Box {
-                                    TextButton(onClick = { scheduleMenu = true }) { Text("Schedule") }
-                                    DropdownMenu(expanded = scheduleMenu, onDismissRequest = { scheduleMenu = false }) {
-                                        listOf("Due now" to "now", "Tomorrow" to "tomorrow", "In 7 days" to "week", "Reset schedule" to "reset").forEach { (label, action) ->
-                                            DropdownMenuItem(text = { Text(label) }, onClick = { scheduleMenu = false; onManualSchedule(q, action) })
-                                        }
-                                    }
-                                }
-                            }
-                            if (q.tagsCsv.isNotBlank()) Text("Tags: ${q.tagsCsv}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
-                            if (q.latex.isNotBlank()) Text("Math formula available · open question to view", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (showBulkTagDialog) {
-        AlertDialog(
-            onDismissRequest = { showBulkTagDialog = false },
-            title = { Text(if (bulkTagAdd) "Add tag to selected" else "Remove tag from selected") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("This updates ${selectedQuestionIds.size} selected question(s). A content version is saved when a tag list changes.", style = MaterialTheme.typography.bodySmall)
-                    OutlinedTextField(
-                        value = bulkTagName,
-                        onValueChange = { bulkTagName = it.take(60) },
-                        label = { Text("Tag name") },
-                        supportingText = { if (bulkTagName.contains(',')) Text("Use one tag at a time; commas are not allowed.") },
-                        isError = bulkTagName.contains(','),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val selected = QuestionSelectionRules.resolve(questions, selectedQuestionIds)
-                    val tag = bulkTagName.trim()
-                    if (selected.isNotEmpty() && tag.isNotEmpty()) {
-                        onBulkTag(selected, tag, bulkTagAdd)
-                        selectedQuestionIds = emptySet()
-                        showBulkTagDialog = false
-                    }
-                }, enabled = bulkTagName.isNotBlank() && !bulkTagName.contains(',') && selectedQuestionIds.isNotEmpty()) { Text(if (bulkTagAdd) "Add" else "Remove") }
-            },
-            dismissButton = { TextButton(onClick = { showBulkTagDialog = false }) { Text("Cancel") } }
-        )
-    }
-    if (showBulkCollectionDialog) {
-        AlertDialog(
-            onDismissRequest = { showBulkCollectionDialog = false },
-            title = { Text(if (bulkCollectionAdd) "Add selected to collection" else "Remove selected from collection") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Choose one collection for ${selectedQuestionIds.size} selected question(s). Changed questions get a version-history snapshot.", style = MaterialTheme.typography.bodySmall)
-                    Box {
-                        OutlinedButton(onClick = { bulkCollectionMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(collections.firstOrNull { it.id == bulkCollectionId }?.name ?: "Choose collection")
-                        }
-                        DropdownMenu(expanded = bulkCollectionMenu, onDismissRequest = { bulkCollectionMenu = false }) {
-                            collections.forEach { collection ->
-                                DropdownMenuItem(text = { Text(collection.name) }, onClick = { bulkCollectionId = collection.id; bulkCollectionMenu = false })
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val selected = QuestionSelectionRules.resolve(questions, selectedQuestionIds)
-                    if (selected.isNotEmpty() && bulkCollectionId.isNotBlank()) {
-                        onBulkCollection(selected, bulkCollectionId, bulkCollectionAdd)
-                        selectedQuestionIds = emptySet()
-                        showBulkCollectionDialog = false
-                    }
-                }, enabled = bulkCollectionId.isNotBlank() && selectedQuestionIds.isNotEmpty()) { Text(if (bulkCollectionAdd) "Add" else "Remove") }
-            },
-            dismissButton = { TextButton(onClick = { showBulkCollectionDialog = false }) { Text("Cancel") } }
-        )
-    }
-    if (showTagManager) {
-        AlertDialog(
-            onDismissRequest = { showTagManager = false },
-            title = { Text("Tag manager") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    Text("Create, rename or delete tags. Renaming and deleting also updates every question that uses the tag.", style = MaterialTheme.typography.bodySmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(value = newTagName, onValueChange = { newTagName = it.filterNot { ch -> ch == ',' }.take(40) }, label = { Text("New tag") }, singleLine = true, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { val clean = newTagName.trim(); if (clean.isNotEmpty() && tags.none { it.name.equals(clean, true) }) { onAddTag(clean); newTagName = "" } }, enabled = newTagName.isNotBlank()) { Text("Add") }
-                    }
-                    if (tags.isEmpty()) Text("No tags yet. Add one here or enter tags in the question editor.")
-                    tags.forEach { tag ->
-                        val usage = questions.count { q -> TagText.parse(q.tagsCsv).any { it.equals(tag.name, true) } }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) { Text(tag.name); Text("Used by $usage questions", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            TextButton(onClick = { editingTag = tag; editedTagName = tag.name }) { Text("Rename") }
-                            TextButton(onClick = { deletingTag = tag }) { Text("Delete") }
-                        }
-                        HorizontalDivider()
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showTagManager = false }) { Text("Done") } }
-        )
-    }
-    editingTag?.let { tag ->
-        AlertDialog(onDismissRequest = { editingTag = null }, title = { Text("Rename tag") },
-            text = { OutlinedTextField(value = editedTagName, onValueChange = { editedTagName = it.filterNot { ch -> ch == ',' }.take(40) }, label = { Text("Tag name") }, singleLine = true) },
-            confirmButton = { TextButton(onClick = { val clean = editedTagName.trim(); if (clean.isNotEmpty() && tags.none { it.name.equals(clean, true) && it.id != tag.id }) { onRenameTag(tag.name, clean); editingTag = null } }, enabled = editedTagName.isNotBlank()) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { editingTag = null }) { Text("Cancel") } })
-    }
-    deletingTag?.let { tag ->
-        AlertDialog(onDismissRequest = { deletingTag = null }, title = { Text("Delete tag?") },
-            text = { Text("${tag.name} will be removed from all questions. This cannot be undone.") },
-            confirmButton = { TextButton(onClick = { onDeleteTag(tag); deletingTag = null }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { deletingTag = null }) { Text("Cancel") } })
-    }
-    if (showSavePreset) {
-        AlertDialog(
-            onDismissRequest = { showSavePreset = false },
-            title = { Text("Save filter preset") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Save the current search and filter combination for reuse. Saving with an existing name updates that preset.")
-                    OutlinedTextField(
-                        value = presetName,
-                        onValueChange = { presetName = it.take(50) },
-                        label = { Text("Preset name") },
-                        singleLine = true
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val cleanName = presetName.trim()
-                    if (cleanName.isNotEmpty()) {
-                        onSavePreset(cleanName, criteria)
-                        showSavePreset = false
-                    }
-                }, enabled = presetName.isNotBlank()) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { showSavePreset = false }) { Text("Cancel") } }
-        )
-    }
-    if (showManagePresets) {
-        AlertDialog(
-            onDismissRequest = { showManagePresets = false },
-            title = { Text("Manage saved filters") },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())
-                ) {
-                    savedFilterPresets.forEach { preset ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(preset.name, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { presetPendingDelete = preset }) { Text("Delete") }
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showManagePresets = false }) { Text("Done") } }
-        )
-    }
-    presetPendingDelete?.let { preset ->
-        AlertDialog(
-            onDismissRequest = { presetPendingDelete = null },
-            title = { Text("Delete saved filter?") },
-            text = { Text("\"${preset.name}\" will be removed. Your questions and collections will not be affected.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onDeletePreset(preset)
-                    presetPendingDelete = null
-                }) { Text("Delete") }
-            },
-            dismissButton = { TextButton(onClick = { presetPendingDelete = null }) { Text("Cancel") } }
-        )
-    }
-}
-
 @Composable
 private fun SelectionFormattingField(
     value: String,

@@ -19,6 +19,7 @@ def read(relative: str) -> str:
 app_gradle = read("app/build.gradle.kts")
 database = read("app/src/main/java/com/studyforge/app/data/StudyDatabase.kt")
 app_ui = read("app/src/main/java/com/studyforge/app/ui/StudyForgeApp.kt")
+paged_ui = read("app/src/main/java/com/studyforge/app/ui/PagedLibraryScreen.kt")
 workflow = read(".github/workflows/android-apk.yml")
 cloze_verifier = read("tools/verify_cloze_reimplementation.py")
 room_runtime_test = read("app/src/androidTest/java/com/studyforge/app/data/StudyDatabaseRuntimeTest.kt")
@@ -42,6 +43,7 @@ media_tests = read("app/src/test/java/com/studyforge/app/data/MediaImportRulesTe
 review_trend_rules = read("app/src/main/java/com/studyforge/app/data/ReviewTrendRules.kt")
 review_trend_ui = read("app/src/main/java/com/studyforge/app/ui/StudyScreens.kt")
 review_trend_tests = read("app/src/test/java/com/studyforge/app/data/ReviewTrendRulesTest.kt")
+navigation_layout_check = read("tools/verify_navigation_layout.py")
 signing = read("SIGNING_SETUP.md")
 plan = read("StudyForge_Plan.txt")
 current_plan = read("PROJECT_PLAN.md")
@@ -49,14 +51,14 @@ current_plan = read("PROJECT_PLAN.md")
 assert 'versionName = "2.1.24"' in app_gradle, "Unexpected app versionName"
 assert "Version 2.1.24 • StudyForge learning system" in app_ui, "Dashboard release label is stale"
 assert re.search(r"versionCode\s*=\s*28\b", app_gradle), "Unexpected versionCode"
-assert re.search(r"version\s*=\s*15\s*,", database), "Room schema must remain 15"
-assert "Current Room database schema version 15" in current_plan, "PROJECT_PLAN Room baseline is stale"
+assert re.search(r"version\s*=\s*16\s*,", database), "Current Room schema must be 16"
+assert "Current Room database schema version 16" in current_plan, "PROJECT_PLAN Room baseline is stale"
 assert "Backup JSON schema version 15" in current_plan, "PROJECT_PLAN backup baseline is stale"
-assert "1 -> 2` through `14 -> 15" in current_plan, "PROJECT_PLAN migration baseline is stale"
+assert "1 -> 2` through `15 -> 16" in current_plan, "PROJECT_PLAN migration baseline is stale"
 
 # Every additive Room migration from the original schema to the current schema
 # must be declared, and every migration must be registered in the builder.
-migration_pairs = [(n, n + 1) for n in range(1, 15)]
+migration_pairs = [(n, n + 1) for n in range(1, 16)]
 for old, new in migration_pairs:
     name = f"MIGRATION_{old}_{new}"
     assert name in database, f"Missing Room migration {old}->{new}"
@@ -72,7 +74,7 @@ assert "python3 tools/verify_cloze_reimplementation.py" in workflow
 assert "python3 tools/verify_release_2_1_24.py" in workflow
 assert "python3 tools/verify_v2_source_integrity.py" in workflow
 assert "verify_release_2_1_23.py" not in workflow
-for old, new in [(n, n + 1) for n in range(7, 15)]:
+for old, new in [(n, n + 1) for n in range(7, 16)]:
     assert f"verify_migration_{old}_{new}.py" in workflow, f"CI omits SQLite migration check {old}->{new}"
 assert "verify_backup_schema_15.py" in workflow
 assert "verify_backup_media_import.py" in workflow
@@ -83,8 +85,11 @@ assert "verify_live_smart_filters.py" in workflow
 assert "verify_bulk_selection.py" in workflow
 assert "verify_session_preset_edit.py" in workflow
 assert "verify_study_ui_performance.py" in workflow
-assert app_ui.count("QuestionSelectionRules.resolve(questions, selectedQuestionIds)") == 4
-assert "bulk actions resolve selected IDs" in bulk_selection_check
+assert "1 -> PagedLibraryScreen(" in app_ui
+assert "collectAsLazyPagingItems()" in paged_ui
+assert "mutableStateOf(setOf<String>())" in paged_ui
+assert "onBulkUpdate(selectedIds" in paged_ui
+assert "paged Library bulk actions retain stable IDs" in bulk_selection_check
 assert "saved study-session presets can be edited" in session_preset_edit_check
 assert "LaTeX renderer caches results" in study_ui_performance_check
 assert "fun hasNameConflict(" in session_preset_rules and "fun existingForSave(" in session_preset_rules
@@ -98,9 +103,19 @@ assert "addTrimsAndDeduplicatesCaseInsensitively" in tag_tests
 assert "bulk tag" in bulk_tag_check.lower()
 assert "onBulkCollection" in app_ui and "QuestionVersionRules.createSnapshot(current" in bulk_collection_check
 assert "fun countMatches(" in read("app/src/main/java/com/studyforge/app/data/QuestionLibraryFilter.kt")
-assert "LaunchedEffect(questions, links, savedFilterPresets)" in app_ui
-assert "liveFilterMatchCounts = withContext(Dispatchers.Default)" in app_ui
-assert "countMatches(questions, savedCriteria, presetCollectionIds)" in app_ui
+assert "viewModel.countMatches(preset.toCriteria())" in paged_ui
+assert "presetCounts[preset.id]" in paged_ui
+assert "countQuestionsUsingTag" in database
+assert "countTagUsage" in read("app/src/main/java/com/studyforge/app/data/QuestionRepository.kt")
+assert "python3 tools/verify_v3_batch2_readiness.py" in workflow
+assert "python3 tools/verify_v3_batch3_readiness.py" in workflow
+assert "python3 tools/verify_v3_batch4_readiness.py" in workflow
+assert "python3 tools/verify_v3_batch5_readiness.py" in workflow
+study_ui = read("app/src/main/java/com/studyforge/app/ui/StudyScreens.kt")
+study_app = read("app/src/main/java/com/studyforge/app/ui/StudyForgeApp.kt")
+assert "questions: List<QuestionEntity>" not in study_ui.split("fun StudyScreen(", 1)[1].split("@Composable", 1)[0]
+assert "createStudyQueueIds" in study_app and "loadStudyQueueCards" in study_app
+assert "dueStudyQueueSeparatesNewAndReviewCapsAndPreservesReviewOrder" in read("app/src/androidTest/java/com/studyforge/app/data/StudyDatabaseRuntimeTest.kt")
 assert "savedFilterCountsAreRecomputedFromCurrentQuestions" in read("app/src/test/java/com/studyforge/app/data/QuestionLibraryFilterTest.kt")
 assert "live saved-filter" in smart_filter_check.lower()
 assert "val snapshot = database.withTransaction" in app_ui, "JSON export must use one consistent Room snapshot"
@@ -126,7 +141,9 @@ assert "ContentBlockParsing.validateGraph" in authoring_rules
 assert "graphValidationRequiresTwoFinitePairsAndRejectsMalformedRows" in content_parser_tests
 assert "MediaImportRules.sanitizeBase64Image" in app_ui
 assert "MAX_IMAGE_BYTES = 1_500_000" in media_rules
-assert "ReviewTrendRules.summarize(reviewLogs" in review_trend_ui
+assert "observeProgressDailyReviews" in read("app/src/main/java/com/studyforge/app/ui/StudyForgeApp.kt")
+assert "dailyReviews: List<ProgressDailyReviewRow>" in review_trend_ui
+assert "Daily review activity · 14 days" in review_trend_ui
 assert "Daily review activity · 14 days" in review_trend_ui
 assert "currentStreakDays" in review_trend_rules
 scheduler = read("app/src/main/java/com/studyforge/app/data/ReviewScheduler.kt")
@@ -147,8 +164,9 @@ for case in ("returnsGapFilledFourteenDayTimelineAndScoredAccuracy", "currentStr
     assert case in review_trend_tests, f"Missing review trend regression case: {case}"
 for case in ("validImagePayloadIsPreservedInCanonicalBase64", "malformedBase64IsRejected", "payloadOverDecodedByteLimitIsRejected"):
     assert case in media_tests, f"Missing media import regression case: {case}"
-assert "StudyForge-2.1.24-debug-apk" in workflow
-assert "StudyForge-2.1.24-release-apk" in workflow
+assert "StudyForge-V3.0-dev-debug-apk" in workflow
+assert "StudyForge-V3.0-dev-signed-apk" in workflow
+assert "tools/verify_v3_paging_foundation.py" in workflow
 assert "KEY_ALIAS: studyforge-release" in workflow
 for secret in ("SIGNING_KEYSTORE_BASE64", "SIGNING_STORE_PASSWORD", "SIGNING_KEY_PASSWORD"):
     assert secret in workflow and secret in signing, f"Signing contract missing {secret}"
@@ -156,7 +174,7 @@ assert len(plan.strip()) > 1000, "Original project blueprint is unexpectedly emp
 
 print("PASS: version 2.1.24 / code 28 consistency")
 print("PASS: maintained PROJECT_PLAN technical baseline matches current source")
-print("PASS: Room schema 15 and registered additive migrations 1->2 through 14->15")
+print("PASS: Room schema 16 and registered additive migrations 1->2 through 15->16")
 print("PASS: JSON backup schema 15 export and import compatibility 1..15")
 print("PASS: current CI verifier, migration checks, artifacts, and signing contract")
 print("PASS: Room Android instrumentation tests and emulator CI execution are wired")
@@ -171,7 +189,8 @@ print("PASS: FSRS-6 matches pinned py-fsrs v6.0.0 defaults, memory updates and s
 print("PASS: bulk tag add/remove is transactional and preserves question version history")
 print("PASS: bulk collection add/remove is transactional and preserves membership version history")
 print("PASS: saved smart filters show live counts recalculated from current questions and links")
-print("PASS: bulk actions resolve selections across the full Library, even after filters change")
+print("PASS: active paged Library retains stable ID selections across loaded pages and resolves bulk records in bounded chunks")
 print("PASS: saved study-session presets support editing and stable-ID renaming")
-print("PASS: Study is one-card-at-a-time; Library filtering is off-main-thread; math previews are guarded")
+print("PASS: Study is one-card-at-a-time; active Library filtering/counts are Room-backed; math previews are guarded")
+print("PASS: compact bottom-navigation labels retain full accessibility names and one-line layout")
 print("LIMIT: instrumentation tests are source-added but have not run in this local environment")

@@ -1,3 +1,34 @@
+# Current handoff — 2026-11-26: V2 device feedback and V3 planning
+
+## V2 user-tested status update
+
+- [x] CSV test import accepted 14 valid questions; invalid and duplicate rows were reported as intended.
+- [x] Cloze reimplementation was installed and tested by the user; they confirmed Study no longer crashes and collection assignment succeeds.
+- [x] One-card-at-a-time Study flow and rating controls were viewed/tested on the user's phone.
+- [x] Again/Hard/Good/Easy labels now fit on one line on the user's phone.
+- [x] Dark Mode is working on the user's phone.
+- [ ] Compact bottom-navigation labels from the latest source ZIP still need confirmation on the installed APK. The prior screenshot showed the long Collections/Progress labels clipping/wrapping.
+- [ ] Progress tab and any remaining screen-level Light/Dark visual polish need screenshot-based review and a consolidated pass.
+- [ ] Run the current GitHub Actions workflow against the final V2 source and retain the actual build/test results.
+- [ ] Complete populated Room historical-migration runtime tests, a real backup/restore round-trip, and signing-certificate/update continuity checks, or explicitly defer any gate with approval.
+
+The user explicitly authorized starting V3.0 implementation in substantial batches. V3.0 data-layer foundation is now in source; final V2 acceptance remains a release/merge gate, not a reason to stop isolated V3 source work. This status supersedes the older Cloze incident entry below: the user has confirmed the reimplementation no longer crashes on-device.
+
+
+## V3.0 implementation update — 2026-11-26
+
+Batches 1–7 are now source-implemented: production Library Paging, bounded Study queue, Room-backed Home/Progress aggregates and detailed analytics, removal of root full-table question/review/exam observers, and active-card/active-exam-only rich-content hydration. Batch 7 static readiness is 9/9. Synthetic SQLite 10k/50k functional checks pass, but query plans still show full scans for Library ordering, Due queue ordering and collection paging; a measured additive index/query optimization remains outstanding. Android build, Room instrumentation execution, CI, device performance, memory/frame profiling and V2 closeout gates remain pending. No APK. App 2.1.24/code 28, Room 15, backup 15; FSRS and signing identity unchanged. See `V3_BATCH_7_SCALABILITY.md` and `HANDOFF_FOR_NEW_CHAT.md`.
+
+## Version 3 planned batches
+
+1. **3.0 — Scalable data and study foundation:** Room Paging 3, database-side search/filter/sort, repository/ViewModel boundary, stable incremental Study queue, lazy rich-content rendering, large-library performance and data-safety testing.
+2. **3.1 — Deterministic numerical question engine:** reproducible variable templates, safe formula evaluation, constraints, units, tolerances, rounding/significant figures, explanation substitution and validated distractors.
+3. **3.2 — Stepwise problem solving and advanced formats:** structured derivations, multipart/partial-credit improvements, multi-select, matching/ordering, image occlusion, accessibility and full import/export coverage.
+
+AI generation/API publishing remain Version 4; accounts/cloud sync remain Version 5. See `VERSION_3_DELIVERY_PLAN.md` for details and acceptance criteria. The original `StudyForge_Plan.txt` remains unchanged.
+
+---
+
 ## Latest FSRS-6 status — 2026-11-25
 
 - [x] Match the pinned py-fsrs v6.0.0 `test_memo_state` fixture at every compared transition.
@@ -65,7 +96,7 @@ Earlier FSRS mismatch notes below are historical and superseded by the latest st
 7. Run full Android Gradle/Compose/KSP/JUnit and GitHub Actions.
 8. Verify the user's existing release certificate continuity and test update/offline/backup behavior on the physical Android device.
 
-V3 remains not started until all V1/V2 requirements and acceptance gates are satisfied.
+This line describes the earlier pre-implementation status; V3.0 source work is now underway by user instruction. V2 gates remain release/merge requirements.
 
 ---
 
@@ -78,7 +109,7 @@ V3 remains not started until all V1/V2 requirements and acceptance gates are sat
 - **2.1.22 source implementation:** first-review Good advances into the next configured learning step; first-review Hard starts Learning at step 0 when steps are configured. Easy and final Good graduate as before. StudyForge retains its specified Hard-repeat-current-step policy.
 - **2.1.21 source implementation:** full snapshot-to-current content diff in question version history, including rich blocks, multipart data and collections; schema remains 15.
 - **2.1.20 source implementation:** source/date-specific saved filters, core-field version comparison summaries and question-type accuracy analytics, building on 2.1.19 provenance and preview-first CSV/Anki imports.
-- **Database compatibility:** Room schema 15; additive migrations 1→2 through 14→15 are registered. JSON backup schema 15; import accepts schemas 1–15.
+- **Database compatibility:** Room schema 16; additive migrations 1→2 through 15→16 are registered. JSON backup schema 15; import accepts schemas 1–15.
 - **Local verification:** see current `BUILD_STATUS.md`; do not infer Android build or runtime success from source checks.
 - **Not verified:** full Gradle/Compose/KSP/JUnit build, Room runtime migrations, actual Android backup/restore, GitHub Actions, signed APK/certificate continuity and physical-device acceptance.
 
@@ -581,5 +612,19 @@ V3 remains blocked. These verification additions do not constitute a new app rel
 - Re-ran 11 current verification scripts: release verifier, V2 source-integrity verifier, backup snapshot/schema/media checks, bulk collection/tag/selection checks, live smart-filter checks, saved-session editing checks, and the pinned FSRS diagnostic. All 11 passed. Also ran all eight current SQLite migration smoke scripts (7→8 through 14→15); all passed.
 - The pinned py-fsrs v6.0.0 diagnostic compared every transition in `test_memo_state`; the final state matched S=49.447237416 / D=6.827105750. This is standalone scheduler-core verification, not Android Gradle/JUnit or full upstream-suite parity.
 - Source-level CI wiring includes lint, unit tests, and API 35 Room instrumentation. The latest user-reported workflow failure was emulator boot timeout before `connectedDebugAndroidTest`; the workflow now enables KVM and allows 900 seconds. This change still requires a fresh GitHub Actions run.
-- Remaining acceptance gates: successful GitHub Actions lint/build/JUnit/emulator run; actual Android JSON export/import round-trip; populated historical Room migration runtime coverage; signed APK certificate continuity using the existing external key; and physical-device update/offline/backup acceptance. Continue auditing approved V1/V2 requirements (advanced editor/accessibility, broader smart collections/bulk workflows, deeper analytics/time-spent reliability, and audit attribution). Do not start V3.
+- Remaining acceptance gates: successful GitHub Actions lint/build/JUnit/emulator run; actual Android JSON export/import round-trip; populated historical Room migration runtime coverage; signed APK certificate continuity using the existing external key; and physical-device update/offline/backup acceptance. Continue auditing approved V1/V2 requirements (advanced editor/accessibility, broader smart collections/bulk workflows, deeper analytics/time-spent reliability, and audit attribution). This was the historical instruction before the user authorized V3.0 source work; it is superseded by the current handoff.
 - No production source, app version/versionCode, Room/backup schema, signing material, or original blueprint was changed in this audit. No APK was built or released. The original `StudyForge_Plan.txt` remains unchanged.
+
+
+## V3.0 Batch 3 update — 2026-11-26
+
+The database-side bounded Study queue contract is now present in source. It selects a bounded stable ID snapshot using Study mode and saved-session criteria, then hydrates only those IDs in snapshot order. This is a foundation, not a completed Study migration: the active StudyScreen still consumes the legacy full question list. UI integration, persisted session resume, daily quota/order parity, aggregate query boundaries, and runtime/performance validation remain outstanding.
+
+## V3.0 Batch 4 update — 2026-11-26
+
+The production `StudyScreen` no longer accepts the full question list. It now requests bounded Room ID snapshots, hydrates cards by ID in snapshot order, obtains topic choices from a distinct-topic query, applies saved-session filters in SQL, and uses separate DueNew/DueReview queries to preserve daily quotas and review ordering. Exam eligibility is filtered in Room. Active queue IDs/fingerprint are saved through Compose saved state for restoration when Android restores the screen. Source and standalone SQLite checks pass; Android/Room/Compose runtime, CI, device, and large-library validation remain pending. Full-list consumers still exist outside Study, and review logs/rich content remain full-list flows. See `V3_BATCH_4_STUDY_QUEUE_MIGRATION.md`.
+
+
+## V3.0 Batch 8 — query-plan-driven index migration (2026-11-26)
+
+Room schema 16 adds the measured Library sort and Due ordering indexes through additive migration 15→16. The host SQLite benchmark now gates the Library, Due and collection first-page plans at 10k/50k. The migration verifier preserves populated rows and confirms the intended indexes. Android Room migration execution, CI, backup/restore and physical-device profiling remain open.

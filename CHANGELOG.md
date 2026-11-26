@@ -1,3 +1,17 @@
+## Unreleased — V3.0 Batch 7 (2026-11-26)
+
+- Study now loads rich content only for the active question; Exam loads multipart parts only for its bounded active question snapshot. Removed the corresponding root full-table observers.
+- Added bounded Room multipart hydration and instrumentation test source.
+- Added synthetic SQLite 10k/50k functional benchmark and query-plan diagnostics, plus Batch 7 source gate in CI. Query plans reveal outstanding Library/Due/collection scan optimization; no speculative Room migration added.
+- Android build/runtime/device performance validation remains pending. No APK, app-version, Room-schema or backup-schema change.
+
+# Unreleased — Version 3.0 development (2026-11-26)
+
+- Started V3.0 data-layer foundation with Room Paging 3, lightweight Library rows, query repository/ViewModel, paged Compose list component, and bounded Study queue ID snapshots.
+- Added Room instrumentation regressions for paged query ordering/filtering and stable queue hydration.
+- Not yet wired into the existing Library/Study production screens; not release-ready.
+- No app version, Room schema, backup schema, FSRS, or signing changes.
+
 ## Unreleased — Appearance
 - Added persistent System / Light / Dark appearance selection in Settings.
 - Theme preference is stored separately in app preferences; no Room schema, backup schema, FSRS, or release-version changes.
@@ -613,3 +627,33 @@ All notable StudyForge changes are recorded here. Newest release first.
 - Hardened collection assignment and question save error handling.
 - Added Cloze, CSV, version snapshot, and Room collection runtime regression tests.
 - Not a release; app version and versionCode remain unchanged. Device/CI verification is pending.
+
+
+## V2 UI polish — bottom navigation
+
+- Replaced long bottom-navigation display labels with compact Folders and Stats labels so all seven destinations remain on one line on narrow phones.
+- Preserved full Collections and Progress names in accessibility content descriptions.
+- Set compact single-line label typography and added a CI static regression check.
+- No database, backup schema, FSRS, or release version changes.
+
+
+## Unreleased — V3.0 Batch 3 (2026-11-26)
+
+- Added a validated bounded Study queue query contract and database-side ID snapshot query with saved-session filters, collection membership, performance criteria, mode ordering, and stable tie-breaking.
+- Added tests and a source-readiness verifier.
+- Study UI integration and Android runtime validation remain pending; no release version change.
+
+
+## V3.0 development — Batch 8 (2026-11-26, unreleased source)
+
+- Added Room 15→16 additive indexes for Library updated-time ordering and Due queue ordering, based on captured SQLite query plans.
+- Updated the synthetic 10k/50k benchmark to assert ordered index use for Library, Due and collection first-page queries.
+- Added migration preservation/query-plan checks and Android Room index/order instrumentation coverage.
+- Room schema 16; JSON backup schema 15; app version 2.1.24/code 28 unchanged. Android build, Room instrumentation, CI and device acceptance remain pending.
+
+## V3.0 development — Batch 9 final acceptance preparation (2026-11-26, unreleased source)
+
+- Added the final Android/Room, populated migration, backup/restore and physical-device acceptance runbook.
+- Added an 11-check static final-acceptance preparation verifier and wired it into CI.
+- Re-ran the current migration/backup/source readiness checks and 10k/50k synthetic host SQLite benchmark. Android build/runtime/device acceptance remains pending.
+- No app version, Room schema, backup schema, FSRS, signing identity or original plan changes. No APK produced.

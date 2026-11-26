@@ -1,3 +1,16 @@
+## Version 3 planning baseline — 2026-11-26
+
+Version 3 is planned in three substantial batches: 3.0 scalable data and study foundation (Room Paging 3); 3.1 deterministic numerical question engine; 3.2 stepwise problem solving and advanced question formats. See `VERSION_3_DELIVERY_PLAN.md`, `ROADMAP.md`, and `PROJECT_PLAN.md`. V3 source implementation is authorized in parallel; V2 closeout remains a release/merge gate. The original `StudyForge_Plan.txt` is preserved unchanged.
+
+The user has confirmed on-device that the Cloze crash is resolved, the one-card Study flow works, the rating buttons fit correctly, and Dark Mode works. The compact bottom-navigation source update and remaining Progress/other-screen visual polish still require final phone confirmation.
+
+
+## Latest V3.0 source continuation — Batch 7 (2026-11-26)
+
+Study no longer observes every rich-content block or multipart question part. The active card loads only its own ordered content blocks; the bounded exam snapshot loads parts only for its selected question IDs. Static Batch 7 readiness is 9/9. Host-side synthetic SQLite benchmarks passed functional checks at 10k and 50k questions, but `EXPLAIN QUERY PLAN` exposed full scans for Library first-page and Due queue ordering, plus a scan for collection paging. No speculative index migration was added. Android/Room compilation, instrumentation, CI, memory/frame and device performance remain unverified. See `V3_BATCH_7_SCALABILITY.md` and `HANDOFF_FOR_NEW_CHAT.md`.
+
+---
+
 ## Latest source continuation (2026-11-25)
 
 Library bulk actions now consistently apply to the full selected question set even after filters change; the Select visible control remains scoped to the current results. This is source-implemented with regression-test source and static CI verification. Android JUnit/UI execution is not yet verified. FSRS is excluded from this continuation.
@@ -6,7 +19,7 @@ Library bulk actions now consistently apply to the full selected question set ev
 
 The pinned py-fsrs v6.0.0 mismatch has been corrected in source. StudyForge now uses the exact 21-parameter vector and pinned v6.0.0 update/learning policies; the standalone Kotlin comparison matches all transitions in `test_memo_state` (final S=49.4472/D=6.8271). The diagnostic is `tools/fsrs6_diagnostics/compare_py_fsrs_6_0_0.py`. A lightweight Kotlin runner passed 32 scheduler regression tests. Android Gradle/JUnit, CI and device verification remain pending; no APK release was made. See `BUILD_STATUS.md` and `SOURCE_PLAN_AUDIT_2.1.24.md`.
 
-The current source remains 2.1.24 / versionCode 28, Room schema 15 and JSON backup schema 15. The export snapshot consistency check is a static contract check, not proof of Android runtime backup/restore. The CI workflow was corrected to call the 2.1.24 verifier and now includes a source-integrity gate. A same-day Hard FSRS-6 regression test was added. Local static/migration/backup checks passed; Android Gradle/JUnit, Room runtime, real backup/restore, GitHub Actions, signing and physical-device acceptance remain unverified. This is not a new APK release. See `BUILD_STATUS.md`, `ROADMAP.md` and `DEVELOPMENT_LOG.md`.
+The current source remains 2.1.24 / versionCode 28, Room schema 16 and JSON backup schema 15. The export snapshot consistency check is a static contract check, not proof of Android runtime backup/restore. The CI workflow was corrected to call the 2.1.24 verifier and now includes a source-integrity gate. A same-day Hard FSRS-6 regression test was added. Local static/migration/backup checks passed; Android Gradle/JUnit, Room runtime, real backup/restore, GitHub Actions, signing and physical-device acceptance remain unverified. This is not a new APK release. See `BUILD_STATUS.md`, `ROADMAP.md` and `DEVELOPMENT_LOG.md`.
 
 
 ## Latest non-FSRS continuation — 2026-11-25
@@ -23,9 +36,11 @@ The current source remains 2.1.24 / versionCode 28, Room schema 15 and JSON back
 The current working source remains 2.1.24 / versionCode 28. This audit adds initial-memory-state equation assertions for all four ratings and a source-vs-plan audit. It does not claim full upstream golden-vector parity or an APK release. See `SOURCE_PLAN_AUDIT_2.1.24.md` and `BUILD_STATUS.md` for evidence and remaining acceptance gates.
 
 
-# StudyForge 2.1.24
+# StudyForge 2.1.24 — V3.0 source development in progress
 
-StudyForge is an offline-first Android question library and learning app. Version 2.1.24 corrects FSRS-6 long-term review-state calculations and adds reference-equation regression coverage; it retains the 2.1.23 learner-revealed HINT blocks.
+StudyForge is an offline-first Android question library and learning app. The current app identity remains 2.1.24 / versionCode 28, Room schema 16 and JSON backup schema 15. V3.0 Batches 1–8 add the Paging foundation, production Library and Study queue migrations, Home/Progress aggregates, lazy rich-content hydration, query-plan-driven indexes and scalability diagnostics. This is unreleased source work: Android compilation, Room runtime, CI, signing and device acceptance are not verified. See `V3_BATCH_2_LIBRARY_MIGRATION_AUDIT.md`, `V3_BATCH_4_STUDY_QUEUE_MIGRATION.md`, `V3_BATCH_5_HOME_PROGRESS_AGGREGATES.md`, `BUILD_STATUS.md` and `HANDOFF_FOR_NEW_CHAT.md` for the current boundary and remaining work.
+
+Version 2.1.24 corrects FSRS-6 long-term review-state calculations and adds reference-equation regression coverage; it retains the 2.1.23 learner-revealed HINT blocks.
 
 ## 2.1.24 highlights
 
@@ -358,3 +373,19 @@ Room instrumentation source now includes a current-schema close/reopen test for 
 - Added pinned fixture and focused regression coverage. The standalone diagnostic compiles the exact Kotlin scheduler and reports a per-transition pass; final S=49.447237416 / D=6.827105750. A lightweight Kotlin/JUnit-compatible runner compiled and executed 32 scheduler tests: 32 passed, 0 failed.
 - The 32-test runner is not Android Gradle/JUnit. The ZIP has no Gradle wrapper and this environment has no Gradle executable. Android build, actual Gradle/JUnit, Room runtime, backup/restore, CI, signing and device tests remain outstanding.
 - No APK or version bump; version 2.1.24/versionCode 28, Room 15 and JSON backup 15 are unchanged. Original `StudyForge_Plan.txt` unchanged.
+
+
+## V3.0 Batch 3 — Study queue query foundation
+
+The source now includes a validated `StudyQueueQuery` and a Room-side bounded ID snapshot query for Study modes and saved-session criteria. It supports collection membership and performance filtering, uses mode-specific ordering with a stable ID tie-breaker, and hydrates only selected cards in snapshot order. Run `python3 tools/verify_v3_batch3_readiness.py` for source-shape checks.
+
+This is not yet the active Study-screen migration: `StudyScreen` still receives the legacy full question list. Process-recreation persistence, daily quota/order parity, database-backed aggregates, Android runtime validation and large-library benchmarks remain pending.
+
+## V3.0 Batch 4 — production Study queue migration
+
+The active Study screen now requests bounded database ID snapshots and hydrates only those cards, rather than receiving the full question table. Due New/Review quotas are independently selected in Room, saved-session criteria and Exam eligibility are SQL-filtered, and topic options are database-backed. Queue IDs and their criteria fingerprint are saved through Compose saved state for restoration when Android restores the screen. Source checks and standalone SQLite query smoke checks pass; Android build, Room instrumentation, CI, physical-device testing and 10k/50k benchmarks remain pending. See `V3_BATCH_4_STUDY_QUEUE_MIGRATION.md`.
+
+
+## Latest V3.0 source continuation — Batch 8 (2026-11-26)
+
+Room schema is now 16 while JSON backup schema remains 15. Additive migration 15→16 adds only the `questions(updatedAt DESC, id ASC)` and `questions(dueAt ASC, id ASC)` indexes, based on Batch 7 query-plan evidence. The Due snapshot uses equivalent null-first ascending order to match the index. The host synthetic benchmark now gates Library, Due and collection first-page plans against the intended index and absence of temporary ORDER BY sorting. These are host SQLite results, not Android/Room/device acceptance. See `V3_BATCH_8_DATABASE_OPTIMIZATION.md` and `HANDOFF_FOR_NEW_CHAT.md`.

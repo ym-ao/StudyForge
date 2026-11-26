@@ -1,3 +1,19 @@
+## V3.0 Batch 7 — lazy content and performance diagnostics
+
+- `V3_BATCH_7_SCALABILITY.md` — implementation, host benchmark results, query-plan findings and remaining performance work.
+- `tools/benchmark_v3_scalability.py` — deterministic host SQLite benchmark for 10k/50k synthetic libraries; not a substitute for Android profiling.
+- `tools/verify_v3_batch7_readiness.py` — static source contract gate for lazy rich-content hydration and benchmark CI wiring.
+- `StudyDatabaseRuntimeTest.richContentHydrationIsScopedToActiveQuestionAndExamSnapshot` — Room instrumentation test source; execution pending.
+
+## 2026-11-26 V3.0 Batch 5 — Home and Progress core aggregates
+
+- `app/src/main/java/com/studyforge/app/data/StudyDatabase.kt` — `HomeDashboardStats` and `ProgressCoreStats` compact Room aggregate projections.
+- `app/src/main/java/com/studyforge/app/ui/StudyForgeApp.kt` — collects Home/Progress aggregate flows and supplies the values to destinations.
+- `app/src/main/java/com/studyforge/app/ui/StudyScreens.kt` — Progress headline cards consume Room aggregate counts.
+- `app/src/androidTest/java/com/studyforge/app/data/StudyDatabaseRuntimeTest.kt` — aggregate projection instrumentation test source.
+- `tools/verify_v3_batch5_readiness.py` — 10-check static readiness gate, wired into `.github/workflows/android-apk.yml` and `verify_v2_source_integrity.py`.
+- `V3_BATCH_5_HOME_PROGRESS_AGGREGATES.md`, `VERSION_3_DELIVERY_PLAN.md`, `IMPLEMENTATION_STATUS.md`, `BUILD_STATUS.md`, `DEVELOPMENT_LOG.md`, and `HANDOFF_FOR_NEW_CHAT.md` — scope and verification boundary.
+
 ## 2026-11-25 FSRS-6 compatibility correction
 
 - `app/src/main/java/com/studyforge/app/data/ReviewScheduler.kt` — aligned with pinned py-fsrs v6.0.0 commit `352c7a2` including defaults, same-day updates, Hard learning/relearning delays and elapsed-day semantics.
@@ -305,3 +321,14 @@
 - `app/src/androidTest/java/com/studyforge/app/data/StudyDatabaseRuntimeTest.kt` — current-schema Room reopen test for ordered TEXT/HINT/IMAGE/TABLE/GRAPH blocks and embedded image metadata.
 - `tools/verify_v2_source_integrity.py` — now asserts that the rich-content runtime test and its key fixtures remain present.
 - `BUILD_STATUS.md` — records that this is test source only until Android emulator CI executes it.
+
+## 2026-11-26 V3.0 Batch 2 production Library Paging
+
+- `app/src/main/java/com/studyforge/app/ui/PagedLibraryScreen.kt` — active Library destination; collects Paging 3 `LazyPagingItems<QuestionLibraryRow>`, renders bounded lightweight rows, manages database-backed filters/presets/tag CRUD, and retains ID-based selection across loaded pages.
+- `app/src/main/java/com/studyforge/app/viewmodel/LibraryViewModel.kt` — owns Library criteria, cancels stale paging flows with `flatMapLatest`, and exposes Room-backed filter/tag counts.
+- `app/src/main/java/com/studyforge/app/data/QuestionRepository.kt` — exposes paged Library data, matching count queries, tag usage counts, and bounded Study queue snapshot APIs.
+- `app/src/main/java/com/studyforge/app/data/StudyDatabase.kt` — lightweight `QuestionLibraryRow`, Room PagingSource/count SQL and tag-specific lookup/count queries.
+- `app/src/androidTest/java/com/studyforge/app/data/StudyDatabaseRuntimeTest.kt` — Room runtime test source for paging order/filter/count/invalidation, tag substring matching, and stable Study queue snapshots; not yet executed in Android runtime.
+- `tools/verify_v3_batch2_readiness.py` — static production-Library integration gate; CI now runs it after the paging foundation verifier.
+- `tools/verify_study_ui_performance.py`, `tools/verify_live_smart_filters.py`, `tools/verify_bulk_tagging.py`, and `tools/verify_bulk_collection.py` — updated static contracts for the active paged Library implementation.
+- `V3_BATCH_2_LIBRARY_MIGRATION_AUDIT.md`, `VERSION_3_DELIVERY_PLAN.md`, `BUILD_STATUS.md`, `IMPLEMENTATION_STATUS.md`, `DEVELOPMENT_LOG.md`, and `HANDOFF_FOR_NEW_CHAT.md` — record the source changes, verification boundary and remaining V3 work.

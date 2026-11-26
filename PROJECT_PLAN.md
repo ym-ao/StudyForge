@@ -6,7 +6,7 @@
 **Platform:** Android (Kotlin + Jetpack Compose)  
 **Working style:** Develop in staged releases, with each ZIP containing the source and updated project records.
 
-> **Current source status:** StudyForge 2.1.24 / versionCode 28, Room schema 15, JSON backup schema 15. Adds FSRS-6 pinned py-fsrs v6.0.0 compatibility corrections and regression fixtures, retaining the 2.1.23 HINT blocks and earlier V1/V2 features. Android build, CI, signed-APK and device verification remain pending. Original `StudyForge_Plan.txt` remains authoritative and unchanged; V1/V2 remain open until all blueprint requirements and verification gates pass.
+> **Current source status:** StudyForge 2.1.24 / versionCode 28, Room schema 16, JSON backup schema 15. User testing has confirmed CSV import (14 valid test rows), the Cloze crash reimplementation, one-question-at-a-time Study, rating-button layout and Dark Mode on-device. Compact bottom-navigation confirmation, Progress/other-screen polish, final CI, populated migration, backup/restore and signing-continuity gates remain open. V3.0 Batches 1–8 are source-implemented: Paging foundation, production Library paging, bounded/production Study queue, Home/Progress aggregates, detailed Progress analytics, removal of root full-table observers for questions/review logs/exam attempts, and active-card/active-exam-only rich-content hydration. Synthetic host SQLite functional and query-plan checks pass at 10k/50k: Library and Due use dedicated ordered indexes, and collection paging scans questions in display order with indexed membership lookups; Android/device performance acceptance remains open. Android build/runtime, CI and device acceptance are not verified. Original `StudyForge_Plan.txt` remains authoritative and unchanged.
 
 ## Product vision
 
@@ -55,40 +55,44 @@ The first useful APK should be genuinely usable for study, not an empty prototyp
 
 The 2.1.2 source adds an FSRS-6 scheduler, persisted review/exam settings, additional study modes, configurable MCQ exams, and expanded analytics. The 2.1.3 source adds timed-exam question navigation and difficulty-based result breakdown. The 2.1.4 source adds ordered multi-step learning/relearning progression with saved step position; 2.1.5 adds saved library-filter presets; 2.1.6 adds tag management and a normalized catalogue. Version 2 remains open until CI/regression and real-device acceptance checks pass, and remaining advanced analytics/custom learning variants are complete.
 
-### Version 3.0 — Advanced question engine
+### Version 3.0 — Scalable data and study foundation
 
-- Dynamic numerical questions.
-- Automatic answer checking.
-- Variable-based templates.
-- Unit validation and tolerances.
-- Step-by-step derivations.
-- Automatic MCQ distractors with validation.
+- Room Paging 3 for the Library, with database-backed search, filters, sorting, and lazy loading.
+- Repository/ViewModel data boundary; avoid holding the entire question table in root Compose state.
+- Incremental one-card-at-a-time Study queue with stable session ordering so ratings cannot cause skipped or repeated cards.
+- On-demand LaTeX, image, graph, and rich-content rendering; benchmark-driven indexes and large-library performance tests.
+- Preserve offline-first behavior, question identity, collection membership, review logs, FSRS state, and backup compatibility.
 
-Use deterministic calculation, range/constraint validation, explicit rounding/significant-figure rules, reproducible variants, and clear answer tolerances. Keep the question template and individual generated variant traceable.
+### Version 3.1 — Deterministic numerical question engine
+
+- Versioned variable-based numerical templates and reproducible variants.
+- Safe deterministic formula evaluation; variable range/constraint validation.
+- Units and conversions, absolute/relative tolerance, equivalent answers, rounding, and significant figures.
+- Explanation substitution and validated automatic MCQ distractors.
+
+### Version 3.2 — Stepwise problem solving and advanced formats
+
+- Structured step-by-step derivations and progressive reveal/attempt flows.
+- Rich multipart/partial-credit grading and accepted answer alternatives.
+- Selected advanced formats from the original blueprint: multi-select, matching/ordering, and image occlusion/diagram labeling.
+- End-to-end editor, Study, exam, scoring, analytics, accessibility, and backup/restore support for every added format.
+
+The detailed sequence, acceptance gates, performance targets, data-safety constraints, and V2 exit gate are maintained in `VERSION_3_DELIVERY_PLAN.md`. V3 source implementation may proceed in an isolated workstream by user direction; do not merge/release V3 or declare V2 closed until the V2 transition checks are closed or explicitly accepted as deferred.
 
 ### Version 4.0 — AI and automation
 
-- In-app AI generation.
-- Multiple AI providers.
-- External API publishing.
-- JSON and script workflows.
-- Question validation pipeline.
-- Draft, approve, and publish workflow.
+- In-app AI generation through provider-independent interfaces.
+- External API publishing, JSON/script workflows, validation pipeline, and draft/approve/publish workflow.
 - Optional web dashboard.
-
-Use provider-independent interfaces and a secure server-side proxy for secrets. AI output must be reviewed and editable before publishing; it must not silently become verified content.
+- AI output remains editable and unverified until the user approves it. Provider secrets stay server-side and never ship in the APK.
 
 ### Version 5.0 — Cloud and expansion
 
-- Optional accounts.
-- Cloud synchronization.
-- Multi-device support.
-- Conflict resolution.
-- Advanced analytics.
-- Question sharing.
-- Multi-user expansion.
-
-Local-only use must continue to work without an account. Synchronization must detect conflicts and avoid silent overwrites.
+- Optional accounts and cloud synchronization.
+- Multi-device support and conflict resolution.
+- Question sharing and multi-user expansion.
+- Advanced analytics that require cross-device or broader learning-history aggregation.
+- Local-only use must continue working without an account; sync must not silently overwrite conflicting edits.
 
 ## Smaller release numbering
 
@@ -104,7 +108,7 @@ The historical paragraph below describes the 2.1.10 source snapshot, not the cur
 
 ## Next recommended work
 
-The current source implements most of the approved V1/V2 feature foundations, but acceptance and independent verification are not complete. Before starting Version 3.0:
+The user has now reported the main V2 feature set tested, including Cloze stability, Anki-style one-card Study, rating controls and Dark Mode. The V3 scope is planned; V3.0 Batch 1 data foundation and Batch 2 production Library Paging integration are implemented in source. The final V2 transition gates listed in `VERSION_3_DELIVERY_PLAN.md` still need to close before a release/merge. Before merging Version 3.0 implementation:
 
 1. Validate FSRS-6 against official upstream golden vectors for initial states, same-day updates, review transitions and short-term sequences.
 2. Add and run Room runtime migration tests across the supported migration chain, preserving populated question, collection, review, content-block, multipart, preset and attempt records.
@@ -123,7 +127,7 @@ Avoid scope creep: keep dynamic numerical templates for Version 3, AI/API workfl
 - Minimum SDK 26; compile SDK 36; target SDK 35.
 - Java 17 target.
 - Android Gradle Plugin 8.13.2; Gradle 8.13 in GitHub Actions.
-- Current Room database schema version 15; additive migrations `1 -> 2` through `14 -> 15` are registered in `StudyDatabase.kt`.
+- Current Room database schema version 16; additive migrations `1 -> 2` through `15 -> 16` are registered in `StudyDatabase.kt`.
 - Backup JSON schema version 15; import accepts schema versions 1 through 15.
 - Current scheduler code `ReviewScheduler.kt` matches the pinned py-fsrs v6.0.0 21-parameter vector and passes the pinned `test_memo_state` fixture in a standalone Kotlin harness. Full upstream-suite parity and Android Gradle/JUnit/device verification remain outstanding.
 - GitHub Actions workflow: `.github/workflows/android-apk.yml`.

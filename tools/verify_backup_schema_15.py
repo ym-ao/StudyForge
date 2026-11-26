@@ -9,11 +9,14 @@ preset = data["savedFilterPresets"][0]
 assert preset["sourceTitle"] == "Biology textbook" and preset["sourceDetail"] == "Chapter 4 page 82"
 assert preset["createdAfter"] == "2026-01-01" and preset["updatedBefore"] == "2026-11-01"
 app = (root / "app/src/main/java/com/studyforge/app/ui/StudyForgeApp.kt").read_text(encoding="utf-8")
+paged_ui = (root / "app/src/main/java/com/studyforge/app/ui/PagedLibraryScreen.kt").read_text(encoding="utf-8")
+repo = (root / "app/src/main/java/com/studyforge/app/data/QuestionRepository.kt").read_text(encoding="utf-8")
 assert "schemaVersion in 1..15" in app and '.put("schemaVersion", 15)' in app
 for field in ("sourceTitle", "sourceDetail", "createdAfter", "createdBefore", "updatedAfter", "updatedBefore"):
     assert f'.put("{field}", preset.{field})' in app
     assert f'{field} = o.optString("{field}")' in app
-assert 'createdAfter = createdAfterFilter' in app and 'updatedBefore = updatedBeforeFilter' in app
+assert 'criteria.createdAfter' in paged_ui and 'criteria.updatedBefore' in paged_ui
+assert 'createdAfter = criteria.createdAfter' in repo and 'updatedBefore = criteria.updatedBefore' in repo
 assert 'sourceTitle = if (schemaVersion < 14) existing?.sourceTitle.orEmpty() else preset.sourceTitle' in app
 assert 'createdAfter = if (schemaVersion < 15) existing?.createdAfter.orEmpty() else preset.createdAfter' in app
 print("PASS: schema-15 backup export/import and saved source/date filters")

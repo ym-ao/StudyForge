@@ -11,6 +11,7 @@ import androidx.room.Insert
 import androidx.room.migration.Migration
 import androidx.room.OnConflictStrategy
 import androidx.room.Upsert
+import androidx.paging.PagingSource
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
@@ -18,7 +19,13 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
-@Entity(tableName = "questions")
+@Entity(
+    tableName = "questions",
+    indices = [
+        Index(value = ["updatedAt", "id"], orders = [Index.Order.DESC, Index.Order.ASC]),
+        Index(value = ["dueAt", "id"])
+    ]
+)
 data class QuestionEntity(
     @PrimaryKey val id: String,
     val prompt: String,
@@ -258,13 +265,310 @@ data class QuestionVersionEntity(
     val snapshotJson: String
 )
 
+/** Lightweight row used by paged Library lists; excludes answer, explanation, LaTeX and rich payloads. */
+data class QuestionLibraryRow(
+    val id: String,
+    val prompt: String,
+    val subject: String,
+    val chapter: String,
+    val topic: String,
+    val exam: String,
+    val type: String,
+    val tagsCsv: String,
+    val status: String,
+    val difficulty: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val reviewCount: Int,
+    val correctCount: Int,
+    val incorrectCount: Int,
+    val fsrsStability: Double,
+    val fsrsDifficulty: Double,
+    val dueAt: Long?
+)
+
+data class HomeDashboardStats(
+    val questionCount: Int,
+    val collectionCount: Int,
+    val reviewCount: Int,
+    val dueCount: Int
+)
+
+data class ProgressCoreStats(
+    val questionCount: Int,
+    val dueCount: Int,
+    val newCount: Int,
+    val learningCount: Int,
+    val masteredCount: Int,
+    val totalReviews: Int,
+    val scoredReviews: Int,
+    val correctReviews: Int,
+    val recentScoredReviews: Int,
+    val recentCorrectReviews: Int,
+    val lastSevenDays: Int,
+    val activeReviewDays: Int
+)
+
+data class ProgressCountRow(val label: String, val count: Int)
+data class ProgressAccuracyRow(val label: String, val scored: Int, val correct: Int)
+data class ProgressRecentReviewRow(
+    val id: String, val questionId: String, val reviewedAt: Long, val rating: String,
+    val wasCorrect: Boolean?, val mistakeCategory: String, val reviewMode: String,
+    val prompt: String?
+)
+data class ProgressDailyReviewRow(val dayKey: String, val totalReviews: Int, val scoredReviews: Int, val correctReviews: Int)
+data class StudyDailyQuotaStats(val newReviewed: Int, val reviewCount: Int)
+data class ProgressExamResponseStats(val scored: Int, val correct: Int)
+data class ProgressExamStats(
+    val attemptCount: Int, val averageScore: Double, val bestScore: Double, val medianScore: Double,
+    val recentTrend: Double?, val band0To39: Int, val band40To59: Int,
+    val band60To79: Int, val band80To100: Int
+)
+
 @Dao
 interface StudyDao {
     @Query("SELECT * FROM questions ORDER BY updatedAt DESC")
     fun observeQuestions(): Flow<List<QuestionEntity>>
 
-    @Query("SELECT * FROM questions WHERE prompt LIKE '%' || :query || '%' OR subject LIKE '%' || :query || '%' OR chapter LIKE '%' || :query || '%' OR topic LIKE '%' || :query || '%' OR tagsCsv LIKE '%' || :query || '%' OR exam LIKE '%' || :query || '%' OR difficulty LIKE '%' || :query || '%' OR sourceTitle LIKE '%' || :query || '%' OR sourceDetail LIKE '%' || :query || '%' ORDER BY updatedAt DESC")
+    /** Small dashboard projection: aggregate values are computed in SQLite, not from a full question list. */
+    @Query("""
+        SELECT
+          (SELECT COUNT(*) FROM questions) AS questionCount,
+          (SELECT COUNT(*) FROM collections) AS collectionCount,
+          (SELECT COALESCE(SUM(reviewCount), 0) FROM questions) AS reviewCount,
+          (SELECT COUNT(*) FROM questions WHERE dueAt IS NULL OR dueAt <= :now) AS dueCount
+    """)
+    fun observeHomeDashboardStats(now: Long): Flow<HomeDashboardStats>
+
+    /** Compact Progress headline metrics; review logs remain the source of truth for accuracy. */
+    @Query("""
+        SELECT
+          (SELECT COUNT(*) FROM questions) AS questionCount,
+          (SELECT COUNT(*) FROM questions WHERE dueAt IS NULL OR dueAt <= :now) AS dueCount,
+          (SELECT COUNT(*) FROM questions WHERE learningState = 'New') AS newCount,
+          (SELECT COUNT(*) FROM questions WHERE learningState IN ('Learning', 'Relearning')) AS learningCount,
+          (SELECT COUNT(*) FROM questions WHERE fsrsStability >= 21.0 AND learningState = 'Review') AS masteredCount,
+          (SELECT COUNT(*) FROM review_logs) AS totalReviews,
+          (SELECT COUNT(*) FROM review_logs WHERE wasCorrect IS NOT NULL) AS scoredReviews,
+          (SELECT COUNT(*) FROM review_logs WHERE wasCorrect = 1) AS correctReviews,
+          (SELECT COUNT(*) FROM review_logs WHERE reviewedAt >= :thirtyDayCutoff AND wasCorrect IS NOT NULL) AS recentScoredReviews,
+          (SELECT COUNT(*) FROM review_logs WHERE reviewedAt >= :thirtyDayCutoff AND wasCorrect = 1) AS recentCorrectReviews,
+          (SELECT COUNT(*) FROM review_logs WHERE reviewedAt >= :sevenDayCutoff) AS lastSevenDays,
+          (SELECT COUNT(DISTINCT date(reviewedAt / 1000, 'unixepoch', 'localtime')) FROM review_logs) AS activeReviewDays
+    """)
+    fun observeProgressCoreStats(now: Long, thirtyDayCutoff: Long, sevenDayCutoff: Long): Flow<ProgressCoreStats>
+
+
+    /** Detailed Progress projections stay in SQLite; no complete question/review-log lists are emitted. */
+    @Query("""SELECT CASE WHEN q.id IS NULL THEN 'Deleted question' ELSE COALESCE(NULLIF(trim(q.type), ''), 'Unspecified') END AS label,
+        COUNT(*) AS scored, SUM(CASE WHEN l.wasCorrect = 1 THEN 1 ELSE 0 END) AS correct
+        FROM review_logs l LEFT JOIN questions q ON q.id = l.questionId
+        WHERE l.wasCorrect IS NOT NULL GROUP BY label ORDER BY MAX(l.reviewedAt) DESC""")
+    fun observeProgressTypeAccuracy(): Flow<List<ProgressAccuracyRow>>
+
+    @Query("""SELECT CASE WHEN q.id IS NULL THEN 'Deleted question'
+        WHEN trim(q.topic) != '' THEN trim(q.topic) WHEN trim(q.chapter) != '' THEN trim(q.chapter)
+        WHEN trim(q.subject) != '' THEN trim(q.subject) ELSE 'Uncategorized' END AS label, COUNT(*) AS count
+        FROM review_logs l LEFT JOIN questions q ON q.id = l.questionId
+        WHERE l.wasCorrect = 0 GROUP BY label ORDER BY count DESC, label COLLATE NOCASE LIMIT 6""")
+    fun observeProgressWeakTopics(): Flow<List<ProgressCountRow>>
+
+    @Query("SELECT COALESCE(NULLIF(trim(subject), ''), 'Uncategorized') AS label, SUM(incorrectCount) AS count FROM questions GROUP BY label HAVING count > 0 ORDER BY count DESC, label COLLATE NOCASE LIMIT 6")
+    fun observeProgressWeakSubjects(): Flow<List<ProgressCountRow>>
+
+    @Query("SELECT COALESCE(NULLIF(trim(chapter), ''), 'Unspecified chapter') || ' · ' || COALESCE(NULLIF(trim(subject), ''), 'Uncategorized') AS label, SUM(incorrectCount) AS count FROM questions GROUP BY chapter, subject HAVING count > 0 ORDER BY count DESC, label COLLATE NOCASE LIMIT 6")
+    fun observeProgressWeakChapters(): Flow<List<ProgressCountRow>>
+
+    @Query("SELECT mistakeCategory AS label, COUNT(*) AS count FROM review_logs WHERE trim(mistakeCategory) != '' GROUP BY mistakeCategory ORDER BY count DESC, label COLLATE NOCASE LIMIT 8")
+    fun observeProgressMistakeCategories(): Flow<List<ProgressCountRow>>
+
+    @Query("""SELECT l.id, l.questionId, l.reviewedAt, l.rating, l.wasCorrect, l.mistakeCategory, l.reviewMode, q.prompt
+        FROM review_logs l LEFT JOIN questions q ON q.id = l.questionId
+        ORDER BY l.reviewedAt DESC, l.id DESC LIMIT 8""")
+    fun observeProgressRecentReviews(): Flow<List<ProgressRecentReviewRow>>
+
+    @Query("""SELECT date(reviewedAt / 1000, 'unixepoch', 'localtime') AS dayKey, COUNT(*) AS totalReviews,
+        SUM(CASE WHEN wasCorrect IS NOT NULL THEN 1 ELSE 0 END) AS scoredReviews,
+        SUM(CASE WHEN wasCorrect = 1 THEN 1 ELSE 0 END) AS correctReviews
+        FROM review_logs WHERE reviewedAt >= :startMillis GROUP BY dayKey ORDER BY dayKey ASC""")
+    fun observeProgressDailyReviews(startMillis: Long): Flow<List<ProgressDailyReviewRow>>
+
+    @Query("""SELECT COUNT(*) AS attemptCount, COALESCE(AVG(scorePercent), 0.0) AS averageScore,
+        COALESCE(MAX(scorePercent), 0.0) AS bestScore,
+        COALESCE((SELECT AVG(scorePercent) FROM (SELECT scorePercent FROM exam_attempts ORDER BY scorePercent ASC LIMIT (2 - (SELECT COUNT(*) FROM exam_attempts) % 2) OFFSET (SELECT CASE WHEN COUNT(*) = 0 THEN 0 ELSE (COUNT(*) - 1) / 2 END FROM exam_attempts))), 0.0) AS medianScore,
+        CASE WHEN COUNT(*) >= 10 THEN
+          (SELECT AVG(scorePercent) FROM (SELECT scorePercent FROM exam_attempts ORDER BY completedAt DESC LIMIT 5)) -
+          (SELECT AVG(scorePercent) FROM (SELECT scorePercent FROM exam_attempts ORDER BY completedAt DESC LIMIT 5 OFFSET 5))
+        ELSE NULL END AS recentTrend,
+        COALESCE(SUM(CASE WHEN scorePercent < 40 THEN 1 ELSE 0 END), 0) AS band0To39,
+        COALESCE(SUM(CASE WHEN scorePercent >= 40 AND scorePercent < 60 THEN 1 ELSE 0 END), 0) AS band40To59,
+        COALESCE(SUM(CASE WHEN scorePercent >= 60 AND scorePercent < 80 THEN 1 ELSE 0 END), 0) AS band60To79,
+        COALESCE(SUM(CASE WHEN scorePercent >= 80 THEN 1 ELSE 0 END), 0) AS band80To100
+        FROM exam_attempts""")
+    fun observeProgressExamStats(): Flow<ProgressExamStats>
+
+    @Query("SELECT * FROM exam_attempts ORDER BY completedAt DESC LIMIT 10")
+    fun observeRecentExamAttempts(): Flow<List<ExamAttemptEntity>>
+
+    @Query("SELECT COALESCE(SUM(CASE WHEN reviewMode = 'New' THEN 1 ELSE 0 END), 0) AS newReviewed, COALESCE(SUM(CASE WHEN reviewMode != 'New' THEN 1 ELSE 0 END), 0) AS reviewCount FROM review_logs WHERE reviewedAt >= :midnight")
+    fun observeStudyDailyQuotaStats(midnight: Long): Flow<StudyDailyQuotaStats>
+
+    @Query("SELECT COUNT(*) AS scored, COALESCE(SUM(CASE WHEN wasCorrect = 1 THEN 1 ELSE 0 END), 0) AS correct FROM review_logs WHERE lower(reviewMode) = 'exam' AND wasCorrect IS NOT NULL")
+    fun observeProgressExamResponseStats(): Flow<ProgressExamResponseStats>
+
+    @Query("""
+        SELECT id, prompt, subject, chapter, topic, exam, type, tagsCsv, status, difficulty,
+               createdAt, updatedAt, reviewCount, correctCount, incorrectCount,
+               fsrsStability, fsrsDifficulty, dueAt
+        FROM questions
+        WHERE (:query = '' OR prompt LIKE '%' || :query || '%' OR answer LIKE '%' || :query || '%'
+               OR explanation LIKE '%' || :query || '%' OR subject LIKE '%' || :query || '%'
+               OR chapter LIKE '%' || :query || '%' OR topic LIKE '%' || :query || '%'
+               OR tagsCsv LIKE '%' || :query || '%' OR exam LIKE '%' || :query || '%'
+               OR difficulty LIKE '%' || :query || '%' OR sourceTitle LIKE '%' || :query || '%'
+               OR sourceDetail LIKE '%' || :query || '%')
+          AND (:type = 'All' OR lower(type) = lower(:type))
+          AND (:status = 'All' OR lower(status) = lower(:status))
+          AND (:difficulty = 'All' OR lower(difficulty) = lower(:difficulty))
+          AND (:subject = '' OR subject LIKE '%' || :subject || '%')
+          AND (:chapter = '' OR chapter LIKE '%' || :chapter || '%')
+          AND (:topic = '' OR topic LIKE '%' || :topic || '%')
+          AND (:tag = '' OR lower(tagsCsv) LIKE '%' || lower(:tag) || '%')
+          AND (:exam = '' OR exam LIKE '%' || :exam || '%')
+          AND (:sourceTitle = '' OR sourceTitle LIKE '%' || :sourceTitle || '%')
+          AND (:sourceDetail = '' OR sourceDetail LIKE '%' || :sourceDetail || '%')
+          AND (:createdAfter = '' OR date(createdAt / 1000, 'unixepoch', 'localtime') >= :createdAfter)
+          AND (:createdBefore = '' OR date(createdAt / 1000, 'unixepoch', 'localtime') <= :createdBefore)
+          AND (:updatedAfter = '' OR date(updatedAt / 1000, 'unixepoch', 'localtime') >= :updatedAfter)
+          AND (:updatedBefore = '' OR date(updatedAt / 1000, 'unixepoch', 'localtime') <= :updatedBefore)
+          AND (:collectionId = '' OR EXISTS (SELECT 1 FROM question_collection qc
+                 WHERE qc.questionId = questions.id AND qc.collectionId = :collectionId))
+          AND (:performance = 'All'
+               OR (:performance = 'Unattempted' AND reviewCount = 0)
+               OR (:performance = 'Weak' AND reviewCount > 0 AND incorrectCount > correctCount)
+               OR (:performance = 'Strong' AND reviewCount > 0 AND correctCount > 0 AND correctCount >= incorrectCount))
+        ORDER BY updatedAt DESC, id ASC
+    """)
+    fun pageLibraryRows(
+        query: String, type: String, status: String, difficulty: String,
+        subject: String, chapter: String, topic: String, tag: String, exam: String,
+        sourceTitle: String, sourceDetail: String, createdAfter: String, createdBefore: String,
+        updatedAfter: String, updatedBefore: String, collectionId: String, performance: String
+    ): PagingSource<Int, QuestionLibraryRow>
+
+    @Query("""
+        SELECT COUNT(*) FROM questions
+        WHERE (:query = '' OR prompt LIKE '%' || :query || '%' OR answer LIKE '%' || :query || '%'
+               OR explanation LIKE '%' || :query || '%' OR subject LIKE '%' || :query || '%'
+               OR chapter LIKE '%' || :query || '%' OR topic LIKE '%' || :query || '%'
+               OR tagsCsv LIKE '%' || :query || '%' OR exam LIKE '%' || :query || '%'
+               OR difficulty LIKE '%' || :query || '%' OR sourceTitle LIKE '%' || :query || '%'
+               OR sourceDetail LIKE '%' || :query || '%')
+          AND (:type = 'All' OR lower(type) = lower(:type))
+          AND (:status = 'All' OR lower(status) = lower(:status))
+          AND (:difficulty = 'All' OR lower(difficulty) = lower(:difficulty))
+          AND (:subject = '' OR subject LIKE '%' || :subject || '%')
+          AND (:chapter = '' OR chapter LIKE '%' || :chapter || '%')
+          AND (:topic = '' OR topic LIKE '%' || :topic || '%')
+          AND (:tag = '' OR lower(tagsCsv) LIKE '%' || lower(:tag) || '%')
+          AND (:exam = '' OR exam LIKE '%' || :exam || '%')
+          AND (:sourceTitle = '' OR sourceTitle LIKE '%' || :sourceTitle || '%')
+          AND (:sourceDetail = '' OR sourceDetail LIKE '%' || :sourceDetail || '%')
+          AND (:createdAfter = '' OR date(createdAt / 1000, 'unixepoch', 'localtime') >= :createdAfter)
+          AND (:createdBefore = '' OR date(createdAt / 1000, 'unixepoch', 'localtime') <= :createdBefore)
+          AND (:updatedAfter = '' OR date(updatedAt / 1000, 'unixepoch', 'localtime') >= :updatedAfter)
+          AND (:updatedBefore = '' OR date(updatedAt / 1000, 'unixepoch', 'localtime') <= :updatedBefore)
+          AND (:collectionId = '' OR EXISTS (SELECT 1 FROM question_collection qc
+                 WHERE qc.questionId = questions.id AND qc.collectionId = :collectionId))
+          AND (:performance = 'All'
+               OR (:performance = 'Unattempted' AND reviewCount = 0)
+               OR (:performance = 'Weak' AND reviewCount > 0 AND incorrectCount > correctCount)
+               OR (:performance = 'Strong' AND reviewCount > 0 AND correctCount > 0 AND correctCount >= incorrectCount))
+    """)
+    suspend fun countLibraryRows(
+        query: String, type: String, status: String, difficulty: String,
+        subject: String, chapter: String, topic: String, tag: String, exam: String,
+        sourceTitle: String, sourceDetail: String, createdAfter: String, createdBefore: String,
+        updatedAfter: String, updatedBefore: String, collectionId: String, performance: String
+    ): Int
+
+    @Query("SELECT id FROM questions WHERE (:mode = 'All' OR (:mode = 'Due' AND (dueAt IS NULL OR dueAt <= :now)) OR (:mode = 'New' AND learningState = 'New')) ORDER BY dueAt ASC, id ASC LIMIT :limit")
+    suspend fun snapshotStudyQueueIds(mode: String, now: Long, limit: Int): List<String>
+
+    /** Bounded, deterministic session-start ID snapshot with the same filters as saved Study presets. */
+    @Query("""
+        SELECT q.id FROM questions q
+        WHERE (:mode NOT IN ('Due', 'DueNew', 'DueReview') OR q.dueAt IS NULL OR q.dueAt <= :now)
+          AND (:mode NOT IN ('New', 'DueNew') OR q.learningState = 'New')
+          AND (:mode != 'DueReview' OR q.learningState != 'New')
+          AND (:mode != 'Topic' OR :topic = '' OR lower(q.topic) = lower(:topic))
+          AND (:subject = '' OR lower(q.subject) = lower(:subject))
+          AND (:chapter = '' OR lower(q.chapter) = lower(:chapter))
+          AND (:presetTopic = '' OR lower(q.topic) = lower(:presetTopic))
+          AND (:tag = '' OR instr(',' || lower(replace(q.tagsCsv, ', ', ',')) || ',', ',' || lower(:tag) || ',') > 0)
+          AND (:difficulty = 'All' OR lower(q.difficulty) = lower(:difficulty))
+          AND (:exam = '' OR lower(q.exam) = lower(:exam))
+          AND (:questionType = 'All' OR lower(q.type) = lower(:questionType))
+          AND (:status = 'All' OR lower(q.status) = lower(:status))
+          AND (:collectionId = '' OR EXISTS (SELECT 1 FROM question_collection qc WHERE qc.questionId = q.id AND qc.collectionId = :collectionId))
+          AND (:performance = 'All'
+               OR (:performance = 'Unattempted' AND q.reviewCount = 0)
+               OR (:performance = 'Weak' AND q.incorrectCount > q.correctCount)
+               OR (:performance = 'Strong' AND q.correctCount > q.incorrectCount AND q.reviewCount > 0))
+          AND (:mode != 'Exam' OR q.type IN ('MCQ', 'True/False', 'Numerical')
+               OR EXISTS (SELECT 1 FROM question_parts qp WHERE qp.questionId = q.id))
+        ORDER BY
+          CASE WHEN :mode IN ('Due', 'DueNew', 'DueReview') AND :reviewOrder != 'Random' AND :reviewOrder != 'Weakest' THEN CASE WHEN q.dueAt IS NULL THEN 0 ELSE 1 END END ASC,
+          CASE WHEN :mode IN ('Due', 'DueNew', 'DueReview') AND :reviewOrder != 'Random' AND :reviewOrder != 'Weakest' THEN q.dueAt END ASC,
+          CASE WHEN :mode = 'DueReview' AND :reviewOrder = 'Weakest' THEN q.incorrectCount END DESC,
+          CASE WHEN :mode = 'DueReview' AND :reviewOrder = 'Weakest' THEN q.dueAt END ASC,
+          CASE WHEN :mode IN ('DueNew', 'DueReview') AND :reviewOrder = 'Random' THEN random() END,
+          CASE WHEN :mode = 'Ordered' THEN q.subject END COLLATE NOCASE ASC,
+          CASE WHEN :mode = 'Ordered' THEN q.chapter END COLLATE NOCASE ASC,
+          CASE WHEN :mode = 'Ordered' THEN q.topic END COLLATE NOCASE ASC,
+          CASE WHEN :mode = 'Ordered' THEN q.createdAt END ASC,
+          CASE WHEN :mode = 'Weakest' THEN q.incorrectCount END DESC,
+          CASE WHEN :mode = 'Weakest' THEN q.fsrsDifficulty END DESC,
+          CASE WHEN :mode = 'Random' OR (:mode = 'Exam' AND :randomize) THEN random() END,
+          CASE WHEN :mode = 'Exam' AND NOT :randomize THEN q.createdAt END ASC,
+          CASE WHEN :mode NOT IN ('Due', 'DueNew', 'DueReview', 'Ordered', 'Weakest', 'Random', 'Exam') THEN q.updatedAt END DESC,
+          q.id ASC
+        LIMIT :limit
+    """)
+    suspend fun snapshotStudyQueueIds(
+        mode: String, now: Long, topic: String, subject: String, chapter: String,
+        presetTopic: String, tag: String, difficulty: String, exam: String,
+        questionType: String, status: String, collectionId: String,
+        performance: String, reviewOrder: String, randomize: Boolean, limit: Int
+    ): List<String>
+
+    @Query("SELECT * FROM questions WHERE id IN (:ids)")
+    suspend fun getQuestionsByIds(ids: List<String>): List<QuestionEntity>
+
+    @Query("SELECT * FROM questions WHERE instr(',' || lower(replace(tagsCsv, ', ', ',')) || ',', ',' || lower(:tag) || ',') > 0 ORDER BY updatedAt DESC")
+    suspend fun getQuestionsUsingTag(tag: String): List<QuestionEntity>
+
+    @Query("SELECT COUNT(*) FROM questions WHERE instr(',' || lower(replace(tagsCsv, ', ', ',')) || ',', ',' || lower(:tag) || ',') > 0")
+    suspend fun countQuestionsUsingTag(tag: String): Int
+
+
+    @Query("SELECT * FROM questions WHERE prompt LIKE '%' || :query || '%' OR subject LIKE '%' || :query || '%' OR answer LIKE '%' || :query || '%' OR explanation LIKE '%' || :query || '%' OR chapter LIKE '%' || :query || '%' OR topic LIKE '%' || :query || '%' OR tagsCsv LIKE '%' || :query || '%' OR exam LIKE '%' || :query || '%' OR difficulty LIKE '%' || :query || '%' OR sourceTitle LIKE '%' || :query || '%' OR sourceDetail LIKE '%' || :query || '%' ORDER BY updatedAt DESC")
     fun searchQuestions(query: String): Flow<List<QuestionEntity>>
+
+    @Query("SELECT DISTINCT trim(topic) FROM questions WHERE trim(topic) != '' ORDER BY trim(topic) COLLATE NOCASE")
+    fun observeStudyTopics(): Flow<List<String>>
+
+
+    /** Splits legacy comma-separated tags in SQLite so the app root need not observe every question. */
+    @Query("""WITH RECURSIVE tag_tokens(questionId, remaining, tag) AS (
+        SELECT id, tagsCsv || ',', '' FROM questions WHERE trim(tagsCsv) != ''
+        UNION ALL
+        SELECT questionId, substr(remaining, instr(remaining, ',') + 1),
+               trim(substr(remaining, 1, instr(remaining, ',') - 1))
+        FROM tag_tokens WHERE remaining != ''
+    )
+    SELECT MIN(tag) AS tag FROM tag_tokens WHERE tag != '' GROUP BY lower(tag) ORDER BY tag COLLATE NOCASE""")
+    fun observeQuestionTagNames(): Flow<List<String>>
 
     @Query("SELECT * FROM questions WHERE id = :id LIMIT 1")
     suspend fun getQuestion(id: String): QuestionEntity?
@@ -444,6 +748,10 @@ interface StudyDao {
     @Query("SELECT * FROM question_parts WHERE questionId = :questionId ORDER BY position")
     suspend fun getQuestionParts(questionId: String): List<QuestionPartEntity>
 
+    /** Loads only parts belonging to the bounded active exam queue (maximum 500 question IDs). */
+    @Query("SELECT * FROM question_parts WHERE questionId IN (:questionIds) ORDER BY questionId ASC, position ASC")
+    suspend fun getQuestionPartsForQuestions(questionIds: List<String>): List<QuestionPartEntity>
+
     @Upsert
     suspend fun upsertQuestionParts(parts: List<QuestionPartEntity>)
 
@@ -472,7 +780,7 @@ interface StudyDao {
 
 @Database(
     entities = [QuestionEntity::class, CollectionEntity::class, QuestionCollectionCrossRef::class, ReviewLogEntity::class, StudySettingsEntity::class, SavedFilterPresetEntity::class, TagEntity::class, QuestionContentBlockEntity::class, QuestionPartEntity::class, StudySessionPresetEntity::class, ExamAttemptEntity::class, QuestionVersionEntity::class],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class StudyDatabase : RoomDatabase() {
@@ -598,13 +906,21 @@ abstract class StudyDatabase : RoomDatabase() {
             }
         }
 
+        /** Add only indexes justified by Batch 7 EXPLAIN QUERY PLAN evidence. */
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_questions_updatedAt_id ON questions(updatedAt DESC, id ASC)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_questions_dueAt_id ON questions(dueAt ASC, id ASC)")
+            }
+        }
+
         @Volatile private var INSTANCE: StudyDatabase? = null
         fun get(context: Context): StudyDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(
                 context.applicationContext,
                 StudyDatabase::class.java,
                 "studyforge.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15).build().also { INSTANCE = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16).build().also { INSTANCE = it }
         }
     }
 }

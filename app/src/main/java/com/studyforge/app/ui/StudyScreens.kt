@@ -44,28 +44,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.studyforge.app.data.QuestionEntity
-import com.studyforge.app.data.QuestionTypeAnalytics
+import com.studyforge.app.data.ProgressCoreStats
 import com.studyforge.app.data.CollectionEntity
-import com.studyforge.app.data.QuestionCollectionCrossRef
 import com.studyforge.app.data.QuestionPartEntity
 import com.studyforge.app.data.MultipartExamRules
 import com.studyforge.app.data.QuestionContentBlockEntity
 import com.studyforge.app.data.StudySessionPresetEntity
 import com.studyforge.app.data.StudySessionRules
 import com.studyforge.app.data.StudySessionPresetRules
+import com.studyforge.app.data.StudyQueueQuery
 import com.studyforge.app.data.DerivationRules
-import com.studyforge.app.data.ReviewLogEntity
+import com.studyforge.app.data.ProgressAccuracyRow
+import com.studyforge.app.data.ProgressCountRow
+import com.studyforge.app.data.ProgressRecentReviewRow
+import com.studyforge.app.data.ProgressDailyReviewRow
+import com.studyforge.app.data.ProgressExamStats
+import com.studyforge.app.data.ProgressExamResponseStats
 import com.studyforge.app.data.ReviewScheduler
 import com.studyforge.app.data.StudySettingsEntity
 import com.studyforge.app.data.ExamAttemptEntity
 import com.studyforge.app.data.ExamAttemptRules
-import com.studyforge.app.data.ReviewTrendRules
 import com.studyforge.app.data.ClozeRules
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.DateFormat
-import java.util.Calendar
 import java.util.Date
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -78,13 +81,15 @@ private val mistakeCategories = listOf(
 
 @Composable
 fun StudyScreen(
-    questions: List<QuestionEntity>,
-    reviewLogs: List<ReviewLogEntity>,
-    contentBlocks: List<QuestionContentBlockEntity>,
-    questionParts: List<QuestionPartEntity>,
+    topics: List<String>,
+    createStudyQueueIds: suspend (StudyQueueQuery, Long) -> List<String>,
+    loadStudyQueueCards: suspend (List<String>) -> List<QuestionEntity>,
+    newReviewedToday: Int,
+    reviewsToday: Int,
+    loadContentBlocks: suspend (String) -> List<QuestionContentBlockEntity>,
+    loadQuestionParts: suspend (List<String>) -> List<QuestionPartEntity>,
     sessionPresets: List<StudySessionPresetEntity>,
     collections: List<CollectionEntity>,
-    collectionLinks: List<QuestionCollectionCrossRef>,
     settings: StudySettingsEntity,
     onSaveSessionPreset: (StudySessionPresetEntity) -> Unit,
     onDeleteSessionPreset: (StudySessionPresetEntity) -> Unit,
@@ -120,59 +125,76 @@ fun StudyScreen(
 
     val activeSessionPreset = sessionPresets.firstOrNull { it.id == activeSessionPresetId }
     val now = System.currentTimeMillis()
-    val midnight = remember(now / 60_000L) {
-        Calendar.getInstance().apply {
-            timeInMillis = now
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-    }
-    val logsToday = remember(reviewLogs, midnight) { reviewLogs.filter { it.reviewedAt >= midnight } }
-    val newReviewedToday = logsToday.count { it.reviewMode == "New" }
-    val reviewsToday = logsToday.count { it.reviewMode != "New" }
-    // Due status changes at minute granularity; do not rebuild queues for every UI state update.
-    val due = remember(questions, now / 60_000L) { questions.filter { it.dueAt == null || it.dueAt <= now } }
     val remainingNew = (settings.newCardsPerDay - newReviewedToday).coerceAtLeast(0)
     val remainingReviews = (settings.reviewCardsPerDay - reviewsToday).coerceAtLeast(0)
-    val orderReviews = when (settings.reviewOrder) {
-        "Oldest" -> compareBy<QuestionEntity> { it.dueAt ?: 0L }
-        "Weakest" -> compareByDescending<QuestionEntity> { it.incorrectCount }.thenBy { it.dueAt ?: 0L }
-        "Random" -> null
-        else -> compareBy<QuestionEntity> { it.dueAt ?: 0L }
-    }
-    val dueNew = remember(due, settings.reviewOrder, remainingNew) {
-        due.filter { it.learningState == "New" }.let { if (settings.reviewOrder == "Random") it.shuffled() else it }.take(remainingNew)
-    }
-    val dueReview = remember(due, settings.reviewOrder, remainingReviews) {
-        due.filter { it.learningState != "New" }.let { list -> if (orderReviews == null) list.shuffled() else list.sortedWith(orderReviews) }.take(remainingReviews)
-    }
-    val dueQuestions = remember(dueNew, dueReview) { dueNew + dueReview }
-    val randomQuestions = remember(questions, mode) { if (mode == "Random") questions.shuffled() else emptyList() }
-    val topics = remember(questions) { questions.asSequence().map { it.topic.trim() }.filter { it.isNotBlank() }.distinct().sorted().toList() }
-    val modeQuestions = remember(questions, mode, selectedTopic, dueQuestions, randomQuestions) {
-        when (mode) {
-            "Due" -> dueQuestions
-            "Random" -> randomQuestions
-            "Ordered" -> questions.sortedWith(compareBy<QuestionEntity> { it.subject.lowercase() }.thenBy { it.chapter.lowercase() }.thenBy { it.topic.lowercase() }.thenBy { it.createdAt })
-            "Weakest" -> questions.sortedWith(compareByDescending<QuestionEntity> { it.incorrectCount }.thenByDescending { it.fsrsDifficulty })
-            "Topic" -> if (selectedTopic.isBlank()) questions else questions.filter { it.topic.equals(selectedTopic, true) }
-            else -> questions
+    var activeQuestions by remember { mutableStateOf<List<QuestionEntity>>(emptyList()) }
+    var activeQueueIds by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var activeQueueFingerprint by rememberSaveable { mutableStateOf("") }
+    var queueLoading by remember { mutableStateOf(true) }
+    var queueError by remember { mutableStateOf<String?>(null) }
+    var queueRefreshToken by remember { mutableIntStateOf(0) }
+    val activeQueueLimit = activeSessionPreset?.questionLimit?.coerceIn(1, 500) ?: 500
+    val activeNewQuota = if (mode == "Due") remainingNew else -1
+    val activeReviewQuota = if (mode == "Due") remainingReviews else -1
+    val activeReviewOrder = if (mode == "Due") settings.reviewOrder else "Oldest"
+    val activeExamRandomize = mode == "Exam" && settings.examRandomize
+    val queueFingerprint = listOf(
+        mode, selectedTopic, activeSessionPreset?.toString().orEmpty(), activeQueueLimit,
+        activeNewQuota, activeReviewQuota, activeReviewOrder, activeExamRandomize
+    ).joinToString("|")
+
+    LaunchedEffect(mode, selectedTopic, activeSessionPreset, activeNewQuota, activeReviewQuota, activeReviewOrder, activeExamRandomize, queueRefreshToken) {
+        queueLoading = true
+        queueError = null
+        try {
+            fun queryFor(queueMode: String, limit: Int) = StudyQueueQuery(
+                mode = queueMode,
+                topic = if (queueMode == "Topic") selectedTopic else "",
+                subject = activeSessionPreset?.subject.orEmpty(),
+                chapter = activeSessionPreset?.chapter.orEmpty(),
+                presetTopic = activeSessionPreset?.topic.orEmpty(),
+                tag = activeSessionPreset?.tag.orEmpty(),
+                difficulty = activeSessionPreset?.difficulty ?: "All",
+                exam = activeSessionPreset?.exam.orEmpty(),
+                questionType = activeSessionPreset?.questionType ?: "All",
+                status = activeSessionPreset?.status ?: "All",
+                collectionId = activeSessionPreset?.collectionId.orEmpty(),
+                performance = activeSessionPreset?.performance ?: "All",
+                reviewOrder = activeReviewOrder,
+                randomize = activeExamRandomize,
+                limit = limit.coerceIn(1, 500)
+            )
+            val ids = if (activeQueueIds.isNotEmpty() && activeQueueFingerprint == queueFingerprint) {
+                activeQueueIds
+            } else if (mode == "Due") {
+                val newIds = if (remainingNew > 0) createStudyQueueIds(queryFor("DueNew", remainingNew.coerceAtMost(activeQueueLimit)), now) else emptyList()
+                val reviewIds = if (remainingReviews > 0) createStudyQueueIds(queryFor("DueReview", remainingReviews.coerceAtMost(activeQueueLimit)), now) else emptyList()
+                (newIds + reviewIds).take(activeQueueLimit)
+            } else {
+                val queryMode = when (mode) {
+                    "Practice", "Step-by-step" -> "All"
+                    else -> mode
+                }
+                createStudyQueueIds(queryFor(queryMode, activeQueueLimit), now)
+            }
+            activeQueueIds = ids
+            activeQueueFingerprint = queueFingerprint
+            val hydratedCards = loadStudyQueueCards(ids)
+            activeQuestions = hydratedCards
+            if (hydratedCards.size != ids.size) activeQueueIds = hydratedCards.map { it.id }
+        } catch (error: Exception) {
+            queueError = error.message ?: "Unable to load the study queue"
+            activeQuestions = emptyList()
+        } finally {
+            queueLoading = false
         }
     }
-    val collectionQuestionIds = remember(collectionLinks, activeSessionPreset?.collectionId) {
-        activeSessionPreset?.collectionId?.takeIf { it.isNotBlank() }?.let { id -> collectionLinks.filter { it.collectionId == id }.map { it.questionId }.toSet() }
-    }
-    val activeQuestions = remember(modeQuestions, activeSessionPreset, collectionQuestionIds) {
-        activeSessionPreset?.let { preset ->
-            StudySessionRules.filterQuestions(modeQuestions, preset, collectionQuestionIds)
-        } ?: modeQuestions
-    }
-    val contentBlocksByQuestion = remember(contentBlocks) { contentBlocks.groupBy { it.questionId } }
 
     LaunchedEffect(mode, selectedTopic, activeSessionPresetId) {
         dueCompletedCount = 0
     }
 
-    LaunchedEffect(mode, activeQuestions.size, selectedTopic) {
+    LaunchedEffect(mode, selectedTopic, activeSessionPresetId, queueFingerprint) {
         index = 0
         revealed = false
         checked = false
@@ -282,7 +304,19 @@ fun StudyScreen(
     }
 
     if (mode == "Exam") {
-        ExamModeScreen(questions = activeQuestions, questionParts = questionParts, settings = settings, onSaveExamAttempt = onSaveExamAttempt, onReview = onReview, onExit = { mode = "Due" })
+        if (queueLoading) {
+            Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text("Loading exam questions…")
+            }
+        } else if (queueError != null) {
+            Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(queueError.orEmpty(), color = MaterialTheme.colorScheme.error)
+                OutlinedButton(onClick = { activeQueueFingerprint = ""; queueRefreshToken++ }) { Text("Retry") }
+            }
+        } else {
+            ExamModeScreen(questions = activeQuestions, loadQuestionParts = loadQuestionParts, settings = settings, onSaveExamAttempt = onSaveExamAttempt, onReview = onReview, onExit = { mode = "Due" })
+        }
         return
     }
 
@@ -356,7 +390,7 @@ fun StudyScreen(
             }
         }
         when (mode) {
-            "Due" -> Text("Due: ${dueQuestions.size} • New remaining today: $remainingNew • Reviews remaining today: $remainingReviews", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            "Due" -> Text("Due: ${activeQuestions.size} in this session • New remaining today: $remainingNew • Reviews remaining today: $remainingReviews", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             "Practice" -> Text("Practice mode never changes your FSRS schedule or review history.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             "Weakest" -> Text("Questions with the most recorded incorrect answers appear first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             "Ordered" -> Text("Questions are grouped by subject, chapter, and topic.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -365,6 +399,16 @@ fun StudyScreen(
             else -> Text("Study selection: $mode • ${activeQuestions.size} questions", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
+        if (queueLoading) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text("Loading study queue…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            return@Column
+        }
+        if (queueError != null) {
+            Text(queueError.orEmpty(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { activeQueueFingerprint = ""; queueRefreshToken++ }) { Text("Retry") }
+            return@Column
+        }
         if (activeQuestions.isEmpty()) {
             StudyEmptyState(
                 title = if (mode == "Due") "You're caught up" else "Nothing to study yet",
@@ -375,6 +419,13 @@ fun StudyScreen(
 
         val safeIndex = index.coerceIn(0, activeQuestions.lastIndex)
         val q = activeQuestions[safeIndex]
+        var activeQuestionBlocks by remember(q.id) { mutableStateOf<List<QuestionContentBlockEntity>>(emptyList()) }
+        var contentBlocksLoaded by remember(q.id) { mutableStateOf(false) }
+        LaunchedEffect(q.id) {
+            contentBlocksLoaded = false
+            activeQuestionBlocks = runCatching { loadContentBlocks(q.id).sortedBy { it.position } }.getOrDefault(emptyList())
+            contentBlocksLoaded = true
+        }
         val progressTotal = (dueCompletedCount + activeQuestions.size).coerceAtLeast(1)
         val progressPosition = if (mode == "Due") dueCompletedCount + safeIndex + 1 else safeIndex + 1
         var revealedHintIds by remember(q.id) { mutableStateOf(emptySet<String>()) }
@@ -395,7 +446,8 @@ fun StudyScreen(
                     Spacer(Modifier.weight(1f))
                 }
                 RichContentText(if (q.type == "Cloze" && !revealed) maskedClozePrompt else q.prompt, style = MaterialTheme.typography.titleLarge)
-                contentBlocksByQuestion[q.id].orEmpty().sortedBy { it.position }.forEach { block ->
+                if (!contentBlocksLoaded) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                activeQuestionBlocks.forEach { block ->
                     when (block.kind.uppercase()) {
                         "LATEX" -> if (block.text.isNotBlank()) LatexFormulaView(block.text)
                         "HEADING" -> Text(block.text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -517,7 +569,12 @@ fun StudyScreen(
                                 else -> if (mode == "Exam") "Exam" else "Review"
                             }
                             onReview(q, rating, wasCorrect, if (wasCorrect == false) mistakeCategory else null, reviewMode)
-                            if (mode == "Due") { dueCompletedCount++; index = 0 } else index = (safeIndex + 1) % activeQuestions.size
+                            if (mode == "Due") {
+                                activeQuestions = activeQuestions.filterNot { it.id == q.id }
+                                activeQueueIds = activeQueueIds.filterNot { it == q.id }
+                                dueCompletedCount++
+                                index = 0
+                            } else index = (safeIndex + 1) % activeQuestions.size
                             revealed = false; checked = false; selectedAnswer = null; mistakeCategory = ""; stepByStepStage = 0
                         }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) {
                             Text(rating, maxLines = 1, softWrap = false)
@@ -539,12 +596,28 @@ fun StudyScreen(
 @Composable
 private fun ExamModeScreen(
     questions: List<QuestionEntity>,
-    questionParts: List<QuestionPartEntity>,
+    loadQuestionParts: suspend (List<String>) -> List<QuestionPartEntity>,
     settings: StudySettingsEntity,
     onSaveExamAttempt: (ExamAttemptEntity) -> Unit,
     onReview: (QuestionEntity, String, Boolean?, String?, String) -> Unit,
     onExit: () -> Unit
 ) {
+    var questionParts by remember { mutableStateOf<List<QuestionPartEntity>>(emptyList()) }
+    var partsLoading by remember { mutableStateOf(true) }
+    var partsLoadError by remember { mutableStateOf<String?>(null) }
+    val examQuestionIdsKey = remember(questions) { questions.joinToString("|") { it.id } }
+    LaunchedEffect(examQuestionIdsKey) {
+        partsLoading = true
+        partsLoadError = null
+        try {
+            questionParts = loadQuestionParts(questions.map { it.id })
+        } catch (error: Exception) {
+            questionParts = emptyList()
+            partsLoadError = error.message ?: "Unable to load multipart exam data"
+        } finally {
+            partsLoading = false
+        }
+    }
     val partsByQuestion = remember(questionParts) { questionParts.groupBy { it.questionId }.mapValues { it.value.sortedBy { part -> part.position } } }
     val eligible = remember(questions, partsByQuestion) {
         questions.filter { q ->
@@ -591,15 +664,22 @@ private fun ExamModeScreen(
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Exam mode", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text("Timed exams support MCQs, true/false, exact-match numerical answers and multipart questions. Multipart scores use each part's assigned points.")
-            Text("Available exam questions: ${eligible.size}")
+            if (partsLoading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text("Loading multipart eligibility…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else if (partsLoadError != null) {
+                Text(partsLoadError.orEmpty(), color = MaterialTheme.colorScheme.error)
+            } else {
+                Text("Eligible questions loaded: ${eligible.size} (exam pool capped at 500)")
+            }
             Text("Configured exam: ${settings.examQuestionCount} questions • ${settings.examDurationMinutes} minutes • ${if (settings.examRandomize) "random order" else "library order"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Button(onClick = {
                 val ordered = if (settings.examRandomize) eligible.shuffled() else eligible.sortedBy { it.createdAt }
                 examQuestions = ordered.take(settings.examQuestionCount)
                 answers.clear(); marked.clear(); manualPartScores.clear(); currentIndex = 0; remainingSeconds = settings.examDurationMinutes * 60; submitted = false; attemptSaved = false; startedAt = System.currentTimeMillis(); started = true
-            }, enabled = eligible.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Start exam") }
+            }, enabled = !partsLoading && partsLoadError == null && eligible.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Start exam") }
             OutlinedButton(onClick = onExit, modifier = Modifier.fillMaxWidth()) { Text("Back to study") }
-            if (eligible.isEmpty()) Text("Add an MCQ, numerical question or a question with authored parts to start an exam.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!partsLoading && partsLoadError == null && eligible.isEmpty()) Text("Add an MCQ, numerical question or a question with authored parts to start an exam.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
@@ -776,67 +856,80 @@ private fun ExamModeScreen(
 }
 
 @Composable
-fun ProgressScreen(questions: List<QuestionEntity>, reviewLogs: List<ReviewLogEntity>, examAttempts: List<ExamAttemptEntity>) {
+fun ProgressScreen(
+    coreStats: ProgressCoreStats,
+    typeAccuracy: List<ProgressAccuracyRow>,
+    weakTopics: List<ProgressCountRow>,
+    weakSubjects: List<ProgressCountRow>,
+    weakChapters: List<ProgressCountRow>,
+    mistakes: List<ProgressCountRow>,
+    recentReviews: List<ProgressRecentReviewRow>,
+    dailyReviews: List<ProgressDailyReviewRow>,
+    examStats: ProgressExamStats,
+    examResponseStats: ProgressExamResponseStats,
+    recentExamAttempts: List<ExamAttemptEntity>
+) {
     var expandedAttemptId by remember { mutableStateOf<String?>(null) }
-    val now = System.currentTimeMillis()
-    val due = questions.count { it.dueAt == null || it.dueAt <= now }
-    val newCount = questions.count { it.learningState == "New" }
-    val learning = questions.count { it.learningState == "Learning" || it.learningState == "Relearning" }
-    val mastered = questions.count { it.fsrsStability >= 21.0 && it.learningState == "Review" }
-    val scoredLogs = reviewLogs.filter { it.wasCorrect != null }
-    val correct = scoredLogs.count { it.wasCorrect == true }
-    val accuracy = if (scoredLogs.isEmpty()) 0 else correct * 100 / scoredLogs.size
-    val cutoff = now - 30L * 24L * 60L * 60L * 1000L
-    val recentLogs = reviewLogs.filter { it.reviewedAt >= cutoff }
-    val sevenDayCutoff = now - 7L * 24L * 60L * 60L * 1000L
-    val lastSevenDays = reviewLogs.count { it.reviewedAt >= sevenDayCutoff }
-    val recentScored = recentLogs.filter { it.wasCorrect != null }
-    val recentAccuracy = if (recentScored.isEmpty()) 0 else recentScored.count { it.wasCorrect == true } * 100 / recentScored.size
-    val byId = questions.associateBy { it.id }
-    val weakTopics = reviewLogs.filter { it.wasCorrect == false }.groupBy { log ->
-        val q = byId[log.questionId]
-        when { q == null -> "Deleted question"; q.topic.isNotBlank() -> q.topic; q.chapter.isNotBlank() -> q.chapter; q.subject.isNotBlank() -> q.subject; else -> "Uncategorized" }
-    }.mapValues { it.value.size }.toList().sortedByDescending { it.second }.take(6)
-    val mistakes = reviewLogs.filter { it.mistakeCategory.isNotBlank() }.groupBy { it.mistakeCategory }.mapValues { it.value.size }.toList().sortedByDescending { it.second }.take(8)
-    val weakSubjects = questions.groupBy { it.subject.ifBlank { "Uncategorized" } }.mapValues { (_, items) -> items.sumOf { it.incorrectCount } }.toList().sortedByDescending { it.second }.take(6)
-    val weakChapters = questions.groupBy { (it.chapter.ifBlank { "Unspecified chapter" }) to (it.subject.ifBlank { "Uncategorized" }) }
-        .mapValues { (_, items) -> items.sumOf { it.incorrectCount } }.toList().sortedByDescending { it.second }.take(6)
-    val reviewDays = reviewLogs.map { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date(it.reviewedAt)) }.distinct().size
-    val reviewTrend = ReviewTrendRules.summarize(reviewLogs, zoneId = ZoneId.systemDefault())
-    val trendDateFormat = remember { DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault()) }
-    val typeAccuracy = QuestionTypeAnalytics.summarize(questions, reviewLogs)
-    val examResponseLogs = reviewLogs.filter { it.reviewMode.equals("Exam", true) && it.wasCorrect != null }
-    val examAccuracy = if (examResponseLogs.isEmpty()) 0 else examResponseLogs.count { it.wasCorrect == true } * 100 / examResponseLogs.size
-    val averageExamScore = ExamAttemptRules.averageScore(examAttempts).toInt()
-    val bestExamScore = ExamAttemptRules.bestScore(examAttempts).toInt()
-    val medianExamScore = ExamAttemptRules.medianScore(examAttempts).toInt()
-    val examTrend = ExamAttemptRules.recentTrend(examAttempts)
-    val examTrendLabel = examTrend?.let { delta ->
+    val due = coreStats.dueCount
+    val newCount = coreStats.newCount
+    val learning = coreStats.learningCount
+    val mastered = coreStats.masteredCount
+    val accuracy = if (coreStats.scoredReviews == 0) 0 else coreStats.correctReviews * 100 / coreStats.scoredReviews
+    val recentAccuracy = if (coreStats.recentScoredReviews == 0) 0 else coreStats.recentCorrectReviews * 100 / coreStats.recentScoredReviews
+    val lastSevenDays = coreStats.lastSevenDays
+    val averageExamScore = examStats.averageScore.toInt()
+    val bestExamScore = examStats.bestScore.toInt()
+    val medianExamScore = examStats.medianScore.toInt()
+    val examTrendLabel = examStats.recentTrend?.let { delta ->
         val sign = if (delta > 0.0) "+" else ""
         "$sign${"%.1f".format(delta)} percentage points across the latest five vs previous five"
     } ?: "Complete at least 10 exams to see a five-attempt trend."
+    val trendDateFormat = remember { DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault()) }
+    val today = java.time.LocalDate.now(ZoneId.systemDefault())
+    val dailyByDate = dailyReviews.associateBy { it.dayKey }
+    val trendDays = (13 downTo 0).map { offset ->
+        val date = today.minusDays(offset.toLong())
+        date to dailyByDate[date.toString()]
+    }
+    val activeDays = trendDays.count { ( _, row) -> (row?.totalReviews ?: 0) > 0 }
+    var streak = 0
+    var streakCursor = if ((dailyByDate[today.toString()]?.totalReviews ?: 0) > 0) today else today.minusDays(1)
+    while (streakCursor >= today.minusDays(13) && (dailyByDate[streakCursor.toString()]?.totalReviews ?: 0) > 0) {
+        streak++; streakCursor = streakCursor.minusDays(1)
+    }
+    val examBandRows = listOf(
+        "0–39%" to "${examStats.band0To39} attempt(s)",
+        "40–59%" to "${examStats.band40To59} attempt(s)",
+        "60–79%" to "${examStats.band60To79} attempt(s)",
+        "80–100%" to "${examStats.band80To100} attempt(s)"
+    )
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Progress", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Analytics are calculated from recorded reviews, not sample data.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Due now", due.toString(), Modifier.weight(1f)); ProgressStat("Total reviews", reviewLogs.size.toString(), Modifier.weight(1f)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Due now", due.toString(), Modifier.weight(1f)); ProgressStat("Total reviews", coreStats.totalReviews.toString(), Modifier.weight(1f)) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Accuracy", "$accuracy%", Modifier.weight(1f)); ProgressStat("30-day accuracy", "$recentAccuracy%", Modifier.weight(1f)) }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Reviews · 7 days", lastSevenDays.toString(), Modifier.weight(1f)); ProgressStat("Active review days", reviewDays.toString(), Modifier.weight(1f)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Reviews · 7 days", lastSevenDays.toString(), Modifier.weight(1f)); ProgressStat("Active review days", coreStats.activeReviewDays.toString(), Modifier.weight(1f)) }
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Daily review activity · 14 days", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("${reviewTrend.activeDays}/14 active days • ${reviewTrend.currentStreakDays}-day current streak", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                reviewTrend.days.forEachIndexed { dayIndex, day ->
+                Text("$activeDays/14 active days • $streak-day current streak", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                trendDays.forEachIndexed { dayIndex, (date, row) ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(day.date.format(trendDateFormat), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                        val accuracyLabel = day.accuracyPercent?.let { " • $it% accuracy" }.orEmpty()
-                        Text("${day.totalReviews} review(s)$accuracyLabel", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(date.format(trendDateFormat), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        val total = row?.totalReviews ?: 0
+                        val scored = row?.scoredReviews ?: 0
+                        val correct = row?.correctReviews ?: 0
+                        val accuracyLabel = if (scored == 0) "" else " • ${correct * 100 / scored}% accuracy"
+                        Text("$total review(s)$accuracyLabel", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (dayIndex != reviewTrend.days.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    if (dayIndex != trendDays.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Saved exams", examAttempts.size.toString(), Modifier.weight(1f)); ProgressStat("Average exam score", "$averageExamScore%", Modifier.weight(1f)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Saved exams", examStats.attemptCount.toString(), Modifier.weight(1f)); ProgressStat("Average exam score", "$averageExamScore%", Modifier.weight(1f)) }
+        val examAccuracy = if (examResponseStats.scored == 0) 0 else examResponseStats.correct * 100 / examResponseStats.scored
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Exam response accuracy", "$examAccuracy%", Modifier.weight(1f)); ProgressStat("Scored exam responses", examResponseStats.scored.toString(), Modifier.weight(1f)) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ProgressStat("Best exam", "$bestExamScore%", Modifier.weight(1f)); ProgressStat("Median exam", "$medianExamScore%", Modifier.weight(1f)) }
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -844,32 +937,29 @@ fun ProgressScreen(questions: List<QuestionEntity>, reviewLogs: List<ReviewLogEn
                 Text(examTrendLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         }
-        ProgressListCard("Exam score distribution", ExamAttemptRules.scoreBandCounts(examAttempts).map { it.first to "${it.second} attempt(s)" }, "Complete an exam to build your score distribution.")
+        ProgressListCard("Exam score distribution", examBandRows, "Complete an exam to build your score distribution.")
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Learning status", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("New: $newCount"); Text("Learning / relearning: $learning"); Text("FSRS stability 21+ days: $mastered")
-                Text("Questions in library: ${questions.size}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text("Questions in library: ${coreStats.questionCount}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         }
-        ProgressListCard("Accuracy by question type", typeAccuracy.map { it.type to "${it.accuracyPercent}% (${it.correct}/${it.scored} correct)" }, "No scored reviews available by question type yet.")
-        ProgressListCard("Topics with most incorrect answers", weakTopics.map { it.first to "${it.second} incorrect" }, "No incorrect answers recorded yet.")
-        ProgressListCard("Subjects with most recorded mistakes", weakSubjects.filter { it.second > 0 }.map { it.first to "${it.second} incorrect" }, "No subject-level mistakes recorded yet.")
-        ProgressListCard("Chapters with most recorded mistakes", weakChapters.filter { it.second > 0 }.map { "${it.first.second} · ${it.first.first}" to "${it.second} incorrect" }, "No chapter-level mistakes recorded yet.")
-        ProgressListCard("Mistake categories", mistakes.map { it.first to "${it.second} times" }, "Mistake categories appear here when you classify an incorrect answer.")
+        ProgressListCard("Accuracy by question type", typeAccuracy.map { it.label to "${if (it.scored == 0) 0 else it.correct * 100 / it.scored}% (${it.correct}/${it.scored} correct)" }, "No scored reviews available by question type yet.")
+        ProgressListCard("Topics with most incorrect answers", weakTopics.map { it.label to "${it.count} incorrect" }, "No incorrect answers recorded yet.")
+        ProgressListCard("Subjects with most recorded mistakes", weakSubjects.map { it.label to "${it.count} incorrect" }, "No subject-level mistakes recorded yet.")
+        ProgressListCard("Chapters with most recorded mistakes", weakChapters.map { it.label to "${it.count} incorrect" }, "No chapter-level mistakes recorded yet.")
+        ProgressListCard("Mistake categories", mistakes.map { it.label to "${it.count} times" }, "Mistake categories appear here when you classify an incorrect answer.")
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Exam history", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if (examAttempts.isEmpty()) Text("Completed exams will appear here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (recentExamAttempts.isEmpty()) Text("Completed exams will appear here.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else {
-                    Text("Best score: $bestExamScore% • ${examAttempts.size} saved attempt(s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    examAttempts.take(10).forEachIndexed { index, attempt ->
-                        Column(
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                expandedAttemptId = if (expandedAttemptId == attempt.id) null else attempt.id
-                            },
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
+                    Text("Best score: $bestExamScore% • ${examStats.attemptCount} saved attempt(s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    recentExamAttempts.forEachIndexed { index, attempt ->
+                        Column(modifier = Modifier.fillMaxWidth().clickable {
+                            expandedAttemptId = if (expandedAttemptId == attempt.id) null else attempt.id
+                        }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("${attempt.scorePercent.toInt()}% • ${"%.2f".format(attempt.earnedPoints)} / ${"%.2f".format(attempt.possiblePoints)} points", fontWeight = FontWeight.SemiBold)
                             Text("${attempt.answeredCount}/${attempt.questionCount} answered • ${attempt.durationSeconds / 60}m ${attempt.durationSeconds % 60}s • ${formatReviewDate(attempt.completedAt)} • ${if (expandedAttemptId == attempt.id) "Hide details" else "View details"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (expandedAttemptId == attempt.id) {
@@ -892,7 +982,7 @@ fun ProgressScreen(questions: List<QuestionEntity>, reviewLogs: List<ReviewLogEn
                                 }
                             }
                         }
-                        if (index != examAttempts.take(10).lastIndex) HorizontalDivider()
+                        if (index != recentExamAttempts.lastIndex) HorizontalDivider()
                     }
                 }
             }
@@ -900,14 +990,13 @@ fun ProgressScreen(questions: List<QuestionEntity>, reviewLogs: List<ReviewLogEn
         Card(shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Recent reviews", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if (reviewLogs.isEmpty()) Text("No review history yet. Complete a study session to start tracking progress.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                else reviewLogs.take(8).forEachIndexed { index, log ->
-                    val q = byId[log.questionId]
+                if (recentReviews.isEmpty()) Text("No review history yet. Complete a study session to start tracking progress.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else recentReviews.forEachIndexed { index, log ->
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(q?.prompt ?: "Question no longer in library", maxLines = 2, fontWeight = FontWeight.Medium)
+                        Text(log.prompt ?: "Question no longer in library", maxLines = 2, fontWeight = FontWeight.Medium)
                         Text("${log.rating} • ${log.reviewMode} • ${formatReviewDate(log.reviewedAt)}${if (log.mistakeCategory.isNotBlank()) " • ${log.mistakeCategory}" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (index != reviewLogs.take(8).lastIndex) HorizontalDivider()
+                    if (index != recentReviews.lastIndex) HorizontalDivider()
                 }
             }
         }
