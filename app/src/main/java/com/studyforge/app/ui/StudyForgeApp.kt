@@ -125,7 +125,11 @@ private data class TableImportResult(val imported: Int, val updated: Int, val sk
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StudyForgeApp(database: StudyDatabase) {
+fun StudyForgeApp(
+    database: StudyDatabase,
+    themeMode: String = "System",
+    onThemeModeChange: (String) -> Unit = {}
+) {
     val dao = database.dao()
     val appContext = LocalContext.current
     val questions by dao.observeQuestions().collectAsState(initial = emptyList())
@@ -484,7 +488,11 @@ fun StudyForgeApp(database: StudyDatabase) {
                     } }
                 )
                 5 -> ProgressScreen(questions = questions, reviewLogs = reviewLogs, examAttempts = examAttempts)
-                6 -> SettingsScreen(settings = studySettings, onSave = { updated ->
+                6 -> SettingsScreen(
+                    settings = studySettings,
+                    themeMode = themeMode,
+                    onThemeModeChange = onThemeModeChange,
+                    onSave = { updated ->
                     scope.launch { dao.upsertSettings(updated); snackbar.showSnackbar("Study settings saved") }
                 })
             }

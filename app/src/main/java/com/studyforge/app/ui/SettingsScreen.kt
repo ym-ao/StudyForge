@@ -29,7 +29,12 @@ import androidx.compose.ui.unit.dp
 import com.studyforge.app.data.StudySettingsEntity
 
 @Composable
-fun SettingsScreen(settings: StudySettingsEntity, onSave: (StudySettingsEntity) -> Unit) {
+fun SettingsScreen(
+    settings: StudySettingsEntity,
+    themeMode: String = "System",
+    onThemeModeChange: (String) -> Unit = {},
+    onSave: (StudySettingsEntity) -> Unit
+) {
     var retention by remember(settings) { mutableFloatStateOf(settings.desiredRetention.toFloat()) }
     var maxInterval by remember(settings) { mutableStateOf(settings.maxIntervalDays.toString()) }
     var newLimit by remember(settings) { mutableStateOf(settings.newCardsPerDay.toString()) }
@@ -43,7 +48,22 @@ fun SettingsScreen(settings: StudySettingsEntity, onSave: (StudySettingsEntity) 
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Study settings", style = MaterialTheme.typography.headlineSmall)
-        Text("These settings are stored locally and included in JSON backups.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("These settings are stored locally. Appearance is saved separately from study scheduling.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Appearance", style = MaterialTheme.typography.titleMedium)
+                Text("Choose how StudyForge looks. System follows your phone's appearance setting.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    listOf("System", "Light", "Dark").forEach { mode ->
+                        FilterChip(
+                            selected = themeMode == mode,
+                            onClick = { onThemeModeChange(mode) },
+                            label = { Text(mode) }
+                        )
+                    }
+                }
+            }
+        }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("FSRS scheduling", style = MaterialTheme.typography.titleMedium)

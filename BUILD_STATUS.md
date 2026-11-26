@@ -336,3 +336,10 @@ Validation in this environment: targeted Kotlin smoke harness passed for the fiv
 ## 2026-11-26 — Cloze reimplementation source check (unreleased)
 
 The Cloze source implementation has been replaced with the bounded scanner described in `CLOZE_REIMPLEMENTATION_AUDIT.md`. Standalone Kotlin harnesses passed: 7 parser/rendering checks and 5 CSV interchange checks. Current source-contract verification scripts passed, including the new Cloze verifier and the bulk-collection verifier. A Room Android instrumentation regression now exercises a Cloze question through question-version creation and collection assignment, but it has not been executed locally. Gradle and Android SDK are not installed in this environment, so no Android APK was built and no device crash was reproduced. Treat this as source-ready for CI, not as a verified release or confirmed phone-crash fix.
+
+
+## 2026-11-26 — rating button layout patch
+
+- Source fix: compact equal-width Again/Hard/Good/Easy buttons and single-line labels for narrow devices.
+- Static verification: `verify_study_ui_performance.py` now asserts compact 4 dp horizontal content padding and `maxLines = 1` / `softWrap = false`.
+- No Android APK was built in this environment; run GitHub Actions and visually confirm on the phone before treating the UI fix as device-verified.

@@ -610,3 +610,11 @@ Targeted Kotlin smoke checks passed across multipart grading, CSV/MCQ preview, q
 ## 2026-11-26 — Cloze remove-and-replace audit
 
 Replaced the minimal regex-based Cloze helper with a bounded scanner that parses indexed deletions and optional hints, supports whole-note and per-index masking, and leaves malformed notation unchanged. Unified Cloze answer normalization between CSV import and the question editor, added import validation, masked the editor preview, and cached Cloze rendering data in Study. Hardened collection save paths by filtering stale collection IDs and surfacing persistence failures rather than allowing unhandled coroutine exceptions to close the app. Added unit and Room runtime regression coverage. See `CLOZE_REIMPLEMENTATION_AUDIT.md` for before/after comparison and verification limitations. Standalone Kotlin Cloze and CSV harnesses passed (7 + 4 checks); Android Gradle/Room tests and physical-device verification remain pending.
+
+
+## 2026-11-26 — Study rating button narrow-screen layout fix
+
+- Fixed the rating row where the five-character “Again” label wrapped onto two lines on the user's phone. All four rating buttons retain equal weight, but now use compact horizontal content padding (4 dp) and explicitly single-line labels (`maxLines = 1`, `softWrap = false`).
+- Added static regression assertions to `tools/verify_study_ui_performance.py` so future changes cannot silently remove the compact padding or single-line label behavior.
+- No FSRS logic, rating values, question data, Room schema, backup schema, app version/versionCode, signing configuration, or original `StudyForge_Plan.txt` was changed.
+- Verification: release 2.1.24, Cloze reimplementation, Study/Library performance, and V2 source-integrity scripts pass. Android Gradle/Compose compilation and a physical-device visual retest still require GitHub Actions and the user's phone; no APK was built here.

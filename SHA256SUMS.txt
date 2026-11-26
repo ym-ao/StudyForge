@@ -1,10 +1,10 @@
 13c52c07fb28c9f8a12377da812a7ba29a513f286ad9956649200316b886cab9  ./.github/workflows/android-apk.yml
 cba0a40dc54868d422f65244b4a9250ef172e6d7c907832a92692916ae653b14  ./.gitignore
-ddf47ad6860076f0409be43ddb22f1a83ad79573ff4c88553d8b3d0675e4de56  ./BUILD_STATUS.md
-ce54ee27199afe654e36976307254e2158729c94d2de905d3229f43119d6c75a  ./CHANGELOG.md
+9d1fc5678ad320a6e643389f1fcbd222c748b8fde180aad258390d54603cbc28  ./BUILD_STATUS.md
+3b186c14c30cec565c2826400e9448f1bef505bffeb366c623a55b343ebd6b36  ./CHANGELOG.md
 f7ed8caf587654586de3c492c378f07c06c976041f633bf262556d241e546d66  ./CLOZE_REIMPLEMENTATION_AUDIT.md
-7df5369d9e4dea49aeb88ed81ccd025b87d25b3c696416c0b6be5f9ee76b0e2a  ./DEVELOPMENT_LOG.md
-5d76ba97ca974d2aef607c04bfa61dabaace9f7a33c762717a5ae784a9804375  ./HANDOFF_FOR_NEW_CHAT.md
+32419c645447aff80ffa694babba31bd0a001e051a49cb77891181f5b08fc033  ./DEVELOPMENT_LOG.md
+157452d20058c7ac918dc95c9dc353f1f2c9872d77db60e0ec9bed3ca8f4ac0d  ./HANDOFF_FOR_NEW_CHAT.md
 6bb7fa8eb4b5248bd4c6a526ce6dddd6d8201b0af8df191bdfc0015e2cd2e1ce  ./IMPLEMENTATION_STATUS.md
 766b9100aeed681c6d345bec2c7f21d440084647c30795114336db5ad3437579  ./PROJECT_FILE_GUIDE.md
 da63f3d7694787ab16f023d0a0e115e163605a506ebd6765b55adcd4e548f95e  ./PROJECT_PLAN.md
@@ -18,7 +18,7 @@ e88a9184728000516acdd5630e37480742bb10385cf7155e20827f67411db8be  ./ROADMAP.md
 7b03ebf1c3825863149c322b629b779cf38cd1e634e705963a3316dcc7a31473  ./app/proguard-rules.pro
 74df74e8db386f56d39092276e5dc9d117cce61bca73ab041930b1133c3e3916  ./app/src/androidTest/java/com/studyforge/app/data/StudyDatabaseRuntimeTest.kt
 fdd00a5c87419414469211ab7f56516e1d36d44d1efffc3d77eb57eaf15fb7fe  ./app/src/main/AndroidManifest.xml
-84debc3f14ec74ee7799378aba1bc79dd268c9cc85a14fdfaa5c385c9a110277  ./app/src/main/java/com/studyforge/app/MainActivity.kt
+847c271063ada35570b69297dbc402c7e4f9c6b164d458d167a0ee57ff3ea766  ./app/src/main/java/com/studyforge/app/MainActivity.kt
 86c0c96b610c90f8bb83f6c964ae0765384532a5a00c67fef4887dfdbd4779c8  ./app/src/main/java/com/studyforge/app/data/ClozeRules.kt
 7159a2b2a765f4d8c83942a3e781c02094e131da310c01e7dffadf4a73e74a7a  ./app/src/main/java/com/studyforge/app/data/CollectionMembershipRules.kt
 e27d62d24668923b5cba509c30e1d56d41561df9880b53220f6acafbda36f5a9  ./app/src/main/java/com/studyforge/app/data/ContentBlockParsing.kt
@@ -40,10 +40,10 @@ b63258e7c9a111685d891138fd531c1bb0dea821c5bb25374e3ef31a17b966c6  ./app/src/main
 cbf56f977fbb6b951eabd27db4cd1965fdf837f9b7bbdf6bd1a3608fdbd325eb  ./app/src/main/java/com/studyforge/app/data/StudySessionRules.kt
 56c41233fb90df0dff6c2c9e2cd79fc938b37b2e9ab79edfa245a2531a12cbe9  ./app/src/main/java/com/studyforge/app/data/TagText.kt
 f899f2da2dd8434778bc9d38100611fb984e86e8fe77178778f3a47fa2fb3b13  ./app/src/main/java/com/studyforge/app/data/TextFormattingRules.kt
-bc4c01d824ee60fbdaac799376dad2eb02d09ff013a25eeaeec95382e67241f5  ./app/src/main/java/com/studyforge/app/ui/SettingsScreen.kt
+390d5dec0e847c5440bb17cb7c6acd5d0d42f46a487f28485805e2f7c649942a  ./app/src/main/java/com/studyforge/app/ui/SettingsScreen.kt
 3a1ea3081d9a3468f6a0ff532ea8c8ea2fb7bd44bb56fc1a0c24db5f76c44cb9  ./app/src/main/java/com/studyforge/app/ui/StudyContent.kt
-50cd3ec13467d3564a7fec8e2261c7d6d3a009396dd77cb90475992c7773f9c2  ./app/src/main/java/com/studyforge/app/ui/StudyForgeApp.kt
-04f5d1e08bb6047acda2eac3a6c4aa7ab6489f7453932ba23b73f487a1f8f1f6  ./app/src/main/java/com/studyforge/app/ui/StudyScreens.kt
+c8338af45792aa4e27c0957b87d09445e283d373434f3289c2a6782212dd8fa5  ./app/src/main/java/com/studyforge/app/ui/StudyForgeApp.kt
+375440a1dfa1729da70f81b6197ecf241bfb1879837276ec4f92854e223a3992  ./app/src/main/java/com/studyforge/app/ui/StudyScreens.kt
 e4b98f26e94218f6d2f10b5b2f07ca2fe515fc55230bd05b25f390f92277ab54  ./app/src/main/res/drawable/ic_studyforge.xml
 a66bd1795519146e0f32b499b7d41f8d6dc4eb63e776669bb896ac91f81256bc  ./app/src/main/res/values/styles.xml
 e570b735dfafb0b6d6a0fcb6a829bfa202211c9737bb067a70b7f3efe5cafffe  ./app/src/test/java/com/studyforge/app/data/ClozeRulesTest.kt
@@ -101,5 +101,5 @@ e5af6e6eedc1b309f1fd9d180ff45df4e6a37086301786a637d0b4bb4af59d39  ./tools/verify
 7b17bc7ff471ae3b22b247e9a1db783000890702f9ee81b87510cdb3bfd6fc9f  ./tools/verify_release_2_1_23.py
 61ea3bb3fce9d8b4e84a2db3f330fe8c5e1c568ee2506eb33daa2a19f24294d7  ./tools/verify_release_2_1_24.py
 98bdbf603c53fd92c74ec782c98e329769d7161f899708bafaa02c44ba9c23f2  ./tools/verify_session_preset_edit.py
-b37ce8aa05de6c8e7b51a0aab5f6900e9eecb43054ea7ccb0621bd56ba806f51  ./tools/verify_study_ui_performance.py
+7e7482e1e83c8ea2a25f0a281681363556464764551df30a9a6fdd254ac28172  ./tools/verify_study_ui_performance.py
 8834f9c7c070fad422cdf542bee1914c459e8a11e8bb081c74be68fba83c5b95  ./tools/verify_v2_source_integrity.py

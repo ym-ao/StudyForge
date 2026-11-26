@@ -505,3 +505,19 @@ Changes in this source handoff:
 - Added Cloze parser/import/version-history/Room collection assignment regression tests.
 
 Standalone Kotlin checks passed (7 Cloze checks and 5 CSV interchange checks). Android Gradle unit tests, Room instrumentation tests, and physical-device reproduction have not been run in this environment. Do not state that the device crash is fixed until GitHub Actions and a phone retest pass. No app version, Room schema, backup schema, FSRS implementation, signing configuration, or user data was changed.
+
+
+## Latest continuation — 2026-11-26 rating button narrow-screen fix
+
+- User confirmed the Cloze reimplementation package no longer crashes on their phone. Treat the reported Cloze crash as resolved by that device retest; broader V2 acceptance remains open.
+- Fixed the Again/Hard/Good/Easy rating row after the user shared a phone screenshot showing “Again” wrapping to two lines. Kept all four buttons equally weighted, reduced horizontal content padding to 4 dp, and forced each label to one line (`maxLines = 1`, `softWrap = false`).
+- Extended `tools/verify_study_ui_performance.py` with a regression assertion for compact button padding and single-line labels.
+- Static verification scripts passed: `verify_study_ui_performance.py`, `verify_release_2_1_24.py`, `verify_cloze_reimplementation.py`, and `verify_v2_source_integrity.py`.
+- This is a source update only. No Gradle/Compose build or APK build was possible in this environment; the visual fix still needs a fresh GitHub Actions build and phone confirmation. No FSRS logic, app version/versionCode, Room schema, backup schema, signing material, or original `StudyForge_Plan.txt` was changed.
+
+
+## Appearance update (unreleased source change)
+- Settings now offers System, Light, and Dark appearance modes.
+- Selection persists in app-private SharedPreferences (`studyforge_appearance`) and applies app-wide through Material 3 color schemes.
+- This intentionally does not change Room schema, JSON backup schema, FSRS, signing configuration, or version metadata.
+- Android Gradle build and physical-device theme verification are still required before treating this as accepted.

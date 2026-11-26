@@ -1,3 +1,7 @@
+## Unreleased — Appearance
+- Added persistent System / Light / Dark appearance selection in Settings.
+- Theme preference is stored separately in app preferences; no Room schema, backup schema, FSRS, or release-version changes.
+
 ## 2.1.24 source continuation — FSRS-6 pinned v6.0.0 compatibility correction
 
 - Aligned the 21 FSRS parameters and memory update formulas with pinned py-fsrs v6.0.0 commit `352c7a2`.

@@ -30,6 +30,10 @@ assert "LinearProgressIndicator(" in study
 assert 'Text("Show answer")' in study
 assert 'if (mode != "Due")' in study, "Due reviews should advance through ratings, not manual skipping"
 assert 'onReview(q, rating, wasCorrect' in study
+# Rating controls must keep labels on one line and use compact horizontal padding
+# so the five-character "Again" label fits on narrow phone widths.
+assert "contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)" in study
+assert "Text(rating, maxLines = 1, softWrap = false)" in study
 
 # Library filtering is stable across UI-only state changes and does not instantiate math views per row.
 assert "LaunchedEffect(questions, criteria, collectionQuestionIds)" in library
@@ -52,6 +56,7 @@ assert "Formula preview unavailable" in content
 
 print("PASS: Study queue derivations are memoized")
 print("PASS: Study renders one active card with queue progress and rating-driven Due navigation")
+print("PASS: Again/Hard/Good/Easy labels remain single-line with compact button padding")
 print("PASS: Library search is debounced, filtering/counts run off the UI thread, and card previews avoid eager math rendering")
 print("PASS: LaTeX renderer caches results and falls back safely for malformed/oversized input")
 print("LIMIT: static source checks do not replace Android Compose runtime and physical-device tests")

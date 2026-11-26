@@ -5,6 +5,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -518,7 +519,9 @@ fun StudyScreen(
                             onReview(q, rating, wasCorrect, if (wasCorrect == false) mistakeCategory else null, reviewMode)
                             if (mode == "Due") { dueCompletedCount++; index = 0 } else index = (safeIndex + 1) % activeQuestions.size
                             revealed = false; checked = false; selectedAnswer = null; mistakeCategory = ""; stepByStepStage = 0
-                        }, modifier = Modifier.weight(1f)) { Text(rating) }
+                        }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) {
+                            Text(rating, maxLines = 1, softWrap = false)
+                        }
                     }
                 }
             }
