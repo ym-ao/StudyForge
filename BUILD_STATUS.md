@@ -502,3 +502,12 @@ The Cloze source implementation has been replaced with the bounded scanner descr
 - This container's environment may be ephemeral; installation and build verification must be rerun in a network-enabled development runner using `scripts/bootstrap_android_tools.sh`.
 
 Do not report the Android toolchain as installed or V3.0 as accepted. GitHub Actions remains the independent Android build/test route.
+
+
+## 2026-11-26 — Room PagingSource invalidation instrumentation race fix
+
+- GitHub Actions successfully reached `:app:connectedDebugAndroidTest` and started all 15 instrumentation tests. One test failed: `StudyDatabaseRuntimeTest.pagedLibraryUsesLightweightRowsStableOrderingAndDatabaseFilters`, at the immediate assertion that `source.invalid` was already true after `upsertQuestion`. The emulator-console warning occurred during startup/teardown, but the test process did start and execute all 15 tests; it is not the reported assertion failure.
+- Root cause indicated by the test sequence: the test checked Room's PagingSource invalidation flag synchronously in the same coroutine turn as the completed DAO write. Room's InvalidationTracker delivers invalidation asynchronously, so the write can return before `PagingSource.invalid` is updated. This is a test timing race; the log does not demonstrate a broken Library query or a failed app feature.
+- Updated the instrumentation test to wait up to 5 seconds, polling every 10 ms for `source.invalid`, then assert the flag. A genuine missing invalidation now fails with a bounded timeout and remains diagnosable. Production DAO/query behavior and database schema are unchanged.
+- Re-ran all 31 Python checks explicitly listed in the current GitHub Actions workflow, including migration 7→16, backup checks, V2/V3 readiness and 10k/50k host SQLite benchmark: all 31 passed after this test-only change.
+- Android instrumentation has NOT yet been rerun after the fix. The updated test must be confirmed by the next GitHub Actions emulator run. Gradle/Android build cannot be executed in this container because the Android toolchain/Gradle wrapper is absent. Do not mark V3.0 accepted until the emulator suite and remaining CI stages pass.

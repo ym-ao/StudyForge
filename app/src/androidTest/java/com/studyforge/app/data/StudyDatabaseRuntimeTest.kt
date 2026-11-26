@@ -7,6 +7,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -365,6 +367,14 @@ class StudyDatabaseRuntimeTest {
         assertEquals(2, dao.countQuestionsUsingTag("cell"))
         assertEquals("page-b", dao.getQuestionsUsingTag("energy").single().id)
         dao.upsertQuestion(QuestionEntity(id = "page-new", prompt = "Newest", answer = "answer", updatedAt = 300L))
+
+        // Room delivers invalidation notifications asynchronously through its
+        // InvalidationTracker. The write can finish before PagingSource.invalid
+        // is flipped, so wait for the notification instead of asserting in the
+        // same coroutine turn (which made this instrumentation test flaky).
+        withTimeout(5_000L) {
+            while (!source.invalid) delay(10L)
+        }
         assertTrue("Room must invalidate a page when its observed table changes", source.invalid)
     }
 
