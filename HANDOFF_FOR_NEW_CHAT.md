@@ -1,5 +1,24 @@
 # CURRENT HANDOFF — 2026-11-26 (V3.0 Batch 9 final acceptance preparation)
 
+## Mandatory tooling and resource-use policy
+## Mandatory Android toolchain installation and verification
+
+Do not stop at describing the Android toolchain or giving the user manual installation instructions. At the start of the session, inspect the actual execution environment (OS, architecture, permissions, internet access, free disk space, RAM, Java/Javac, Gradle/Gradle Wrapper, Android SDK, ADB, and virtualization/hardware acceleration). Then read `TOOLING.md` and attempt to install and configure every missing component that the environment permits, following the project versions and compatibility requirements:
+
+- JDK 17;
+- a verified, pinned Gradle Wrapper compatible with the existing Android Gradle Plugin (do not casually upgrade project plugins);
+- Android SDK Command-line Tools;
+- Android SDK Platform 36 and the compatible Android Build-Tools required by the project;
+- Android Platform Tools (ADB);
+- Android Emulator and a compatible system image only if virtualization, hardware acceleration, and available resources make it practical.
+
+Configure SDK paths/environment variables, accept SDK licences through the documented setup process, and verify the installation with actual version commands and a real Gradle build. Generate the Gradle Wrapper if it is missing, verify it, and commit the wrapper files when appropriate. Create or maintain a reproducible setup script and update `TOOLING.md` with exact versions, commands, and any environment-specific limitations. Record evidence and outcomes in `BUILD_STATUS.md`. Never claim installation, compilation, or tests succeeded without command output. Do not download/reinstall components that are already present and verified. Keep SDKs, caches, emulator images, local properties, signing files, and credentials out of Git. If installation is blocked by permissions, network restrictions, unavailable package sources, disk/RAM limits, or unsupported virtualization, document the exact blocker and continue with the tools that are available; do not imply the unavailable component works. Keep GitHub Actions as an independent verification environment.
+
+
+Before continuing, read `TOOLING.md` and `TESTING_STRATEGY.md` (and `V3_FINAL_ACCEPTANCE_RUNBOOK.md` for acceptance work). Use heavyweight tools strategically: lightweight source checks during ordinary batches; broad Gradle/lint/unit/instrumentation/emulator verification at planned V3.5, V3.9 and V3.10 checkpoints, when a substantial core feature group is complete, or immediately when a bug/regression requires diagnosis. Do not launch the full emulator/test stack after every small edit. Do not defer a serious bug until the next milestone. Inspect the current environment first, reuse verified installations/caches, and keep GitHub Actions as independent verification.
+
+**Immediate priority is unchanged:** complete the current V3.0 Batch 9 acceptance gates described below and in `V3_FINAL_ACCEPTANCE_RUNBOOK.md`. The future V3.5/V3.9/V3.10 cadence does not defer V3.0 acceptance or authorize starting dependent V3.1 work before the current handoff's acceptance gate is satisfied or explicitly deferred by the user.
+
 ## Current source baseline and next action
 
 The latest package is V3.0 Batch 9, built directly from the Batch 8 source. Batch 9 is an acceptance-preparation/documentation batch, not another feature batch: it adds `V3_FINAL_ACCEPTANCE_RUNBOOK.md`, `tools/verify_v3_final_acceptance.py` (11/11 static checks), and CI wiring for that verifier.

@@ -13,3 +13,7 @@ captures/
 signing.properties
 release-key.jks
 *.env
+
+# Local Android toolchain state
+.local/
+.android/

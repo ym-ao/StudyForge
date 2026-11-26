@@ -1,3 +1,7 @@
+## Development tooling and test cadence
+
+Read `TOOLING.md` for the reproducible Android toolchain requirements and `TESTING_STRATEGY.md` for resource-aware verification. Heavy Gradle/emulator testing is intentionally concentrated at V3.5, V3.9 and V3.10, after substantial core feature groups, or when a bug/regression needs investigation. Lightweight checks remain appropriate during ordinary batches. The current V3.0 acceptance gates remain the immediate priority in `HANDOFF_FOR_NEW_CHAT.md` and `V3_FINAL_ACCEPTANCE_RUNBOOK.md`.
+
 ## Version 3 planning baseline — 2026-11-26
 
 Version 3 is planned in three substantial batches: 3.0 scalable data and study foundation (Room Paging 3); 3.1 deterministic numerical question engine; 3.2 stepwise problem solving and advanced question formats. See `VERSION_3_DELIVERY_PLAN.md`, `ROADMAP.md`, and `PROJECT_PLAN.md`. V3 source implementation is authorized in parallel; V2 closeout remains a release/merge gate. The original `StudyForge_Plan.txt` is preserved unchanged.

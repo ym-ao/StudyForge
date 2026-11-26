@@ -451,3 +451,34 @@ The Cloze source implementation has been replaced with the bounded scanner descr
 - Re-ran all CI-wired Python migration, backup, V2/V3 source gates and the 10k/50k host SQLite benchmark. Migration 15→16 preserved populated rows and query-plan checks passed. Recent-review query still has a temporary B-tree for its final ID tie-break and is documented for measurement-led follow-up.
 - Local environment has Java/Javac and kotlinc but no Gradle executable/wrapper, Android SDK tools or ADB. Android lint/compile, JUnit, Room instrumentation, emulator, APK, signing and physical-device profiling remain unverified. Do not describe V3.0 as accepted.
 - App remains 2.1.24/code 28, Room 16, backup 15; FSRS/signing/original `StudyForge_Plan.txt` unchanged. No APK produced.
+
+---
+
+# Toolchain bootstrap attempt — 2026-11-26 (ChatGPT execution environment)
+
+## Environment inspected
+
+- OS/architecture: Debian GNU/Linux 13 (trixie), x86_64.
+- Available resources at inspection: approximately 30 GiB free disk, 5.8 GiB RAM, 3 visible vCPUs.
+- Java/Javac: OpenJDK 21.0.12.1 is present; the project specifies Java 17. JDK 17 is not installed.
+- Gradle/Gradle Wrapper: no `gradle` executable and no wrapper files in the supplied source package.
+- Android SDK/ADB: no `sdkmanager`, `avdmanager`, `adb`, Android platform or build-tools found in standard locations.
+- Emulator acceleration: `/dev/kvm` is absent; no `/dev/dri` device is available. Emulator acceleration is therefore not available in this container as inspected.
+- Network: DNS resolution failed for `services.gradle.org` (`curl: (6) Could not resolve host`). This prevents downloading Gradle, JDK packages, or Google Android command-line tools in this environment. APT package metadata also exposes no install candidates in the current container.
+
+## Actions completed here
+
+- Extracted and inspected the supplied V3.0 Batch 9 project archive and its tooling/handoff instructions.
+- Ran current source/static readiness gates: V3 final acceptance preparation (11/11), Batch 8 (9/9), Batch 7 (9/9), Batch 6 (13/13), Batch 5 (10/10), Batch 4 (11/11), Batch 3 (7/7), Batch 2, Paging foundation, backup schema 15, and V2 source integrity. All reported PASS.
+- `python3 -m compileall -q tools` passed.
+- ZIP integrity check passed.
+- Added `scripts/bootstrap_android_tools.sh`, a reproducible Debian/Ubuntu bootstrap for JDK 17, checksum-verified Gradle 8.13, Android command-line tools, SDK Platform 36, Build Tools 36.0.0, ADB, Gradle Wrapper generation and a debug-build smoke test. The Google command-line-tools ZIP URL is supplied explicitly to avoid guessing a changing package revision.
+
+## Not completed / verification boundary
+
+- Actual installation is blocked by unavailable network/DNS and missing package sources; no Android toolchain component was newly installed.
+- No Gradle build, Kotlin/Compose/KSP compile, Android JUnit, Room instrumentation, emulator test, APK build, signing, or physical-device test was run here.
+- No emulator attempt was made because KVM is unavailable.
+- This container's environment may be ephemeral; installation and build verification must be rerun in a network-enabled development runner using `scripts/bootstrap_android_tools.sh`.
+
+Do not report the Android toolchain as installed or V3.0 as accepted. GitHub Actions remains the independent Android build/test route.
